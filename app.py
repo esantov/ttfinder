@@ -1,10 +1,10 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 from scipy.optimize import curve_fit
-from scipy.interpolate import interp1d
-from sklearn.metrics import r2_score
 from scipy.stats import t
+from sklearn.metrics import r2_score
 import smtplib
 from email.mime.text import MIMEText
 from io import BytesIO
@@ -163,7 +163,7 @@ if st.button("Run Analysis"):
             st.write(f"- R² (Logistic): {r2_logistic:.4f}")
             st.write(f"- Threshold: {threshold:.2f} ➜ Time ≈ {t_thresh:.2f} h")
 
-            fig, ax = plt.subplots(figsize=(8, 8))
+            fig, ax = plt.subplots(figsize=(10, 10))  # Updated to 10x10 inch plot
             ax.plot(t_fit, y, 'ko', label="Raw Data")
             ax.plot(t_fit, y_fit_logistic, 'b-', label="5PL Fit")
             ci_low, ci_high = zip(*ci)
