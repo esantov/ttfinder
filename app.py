@@ -23,31 +23,7 @@ def send_notification(username):
         server.send_message(msg)
         server.quit()
     except Exception as e:
-            st.error(f"❌ Could not fit {col}: {e}")
-
-    if all_figs:
-        with ZipFile(zip_buffer, 'w') as zip_file:
-            for fig, name in all_figs:
-                buf = BytesIO()
-                fig.savefig(buf, format=fmt, dpi=dpi, bbox_inches='tight')
-                zip_file.writestr(name, buf.getvalue())
-
-            df_csv = pd.DataFrame(all_csv_rows, columns=["Sample", "a", "d", "c", "b", "g", "R2", "Threshold Time"])
-            df_formulas = pd.DataFrame(all_formulas, columns=["Sample", "Excel 5PL", "Inverse 5PL"])
-            zip_file.writestr("fitting_parameters.csv", df_csv.to_csv(index=False))
-            zip_file.writestr("excel_formulas.csv", df_formulas.to_csv(index=False))
-
-        zip_buffer.seek(0)
-        st.download_button(
-            label="📦 Download All Results (ZIP)",
-            data=zip_buffer,
-            file_name="5pl_fitting_outputs.zip",
-            mime="application/zip"
-        )",
-            data=zip_buffer,
-            file_name="5pl_fitting_outputs.zip",
-            mime="application/zip"
-        )        # print("Email notification failed:", e)
+        pass
 
 # ----- PUBLIC ACCESS -----
 if "rerun" in st.session_state and st.session_state.rerun:
