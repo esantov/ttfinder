@@ -9,15 +9,6 @@ from io import BytesIO
 def logistic_5pl(t, a, d, c, b, g):
     return d + (a - d) / (1 + (t / c)**b)**g
 
-# ----- Debugging function to check data -----
-def debug_data_state(time, y, sample_label):
-    st.write(f"Debugging {sample_label}:")
-    st.write(f"Time: {time}")
-    st.write(f"Y values: {y}")
-    st.write(f"Data length check: Time length = {len(time)}, Y length = {len(y)}")
-    st.write(f"NaN check for Time: {np.isnan(time).sum()} NaNs in Time")
-    st.write(f"NaN check for Y: {np.isnan(y).sum()} NaNs in Y")
-
 # ----- APP LOGIC -----
 x_label = st.text_input("X-axis label", value="Time (h)")
 y_label = st.text_input("Y-axis label", value="Signal")
@@ -62,9 +53,6 @@ if st.button("Run Analysis"):
     for col in data.columns[1:]:
         y = data[col].dropna().values
         t_fit = time[:len(y)]  # Ensure time and y values match in length
-
-        # Debug data state
-        debug_data_state(t_fit, y, col)
 
         # Check if lengths of time and y match
         if len(t_fit) != len(y):
