@@ -194,9 +194,12 @@ if st.button("Run Analysis"):
 
         df_formulas = pd.DataFrame(all_formulas, columns=["Sample", "Excel 5PL", "Inverse 5PL"])
         st.download_button(
-            label="📄 Download Excel Formulas (CSV)",
-            data=df_formulas.to_csv(index=False),
-        )
+    label="📄 Download Excel Formulas (CSV)",
+    data=df_formulas.to_csv(index=False),
+    file_name="excel_formulas.csv",
+    mime="text/csv"
+)
+
         # Optional: ZIP download button
         with ZipFile(zip_buffer, 'w') as zipf:
             for name, image_bytes in all_figs:
