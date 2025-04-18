@@ -2,14 +2,17 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from scipy.optimize import curve_fit
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 from io import BytesIO
+import smtplib
+from email.mime.text import MIMEText
+import datetime
 
 # ----- Simple 5PL logistic function for fitting -----
 def logistic_5pl(t, a, d, c, b, g):
     return d + (a - d) / (1 + (t / c)**b)**g
 
-# ----- Inverse 5PL function -----
+# ----- Inverse 5PL function for calculating threshold time -----
 def inverse_logistic_5pl(y, a, d, c, b, g):
     return c * (((a - d) / (y - d)) ** (1 / g) - 1) ** (1 / b)
 
@@ -20,9 +23,33 @@ def calculate_threshold_time(threshold, popt):
         raise ValueError(f"Threshold must be within the range of the 5PL function (d={d}, a={a}).")
     return c * (((a - d) / (threshold - d)) ** (1 / g) - 1) ** (1 / b)
 
-# ----- APP LOGIC -----
+# ----- EMAIL NOTIFICATION FUNCTION -----
+def send_email_notification(username):
+    try:
+        msg = MIMEText(f"User '{username}' just accessed the 5PL web app on {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.")
+        msg['Subject'] = 'New 5PL App Session'
+        msg['From'] = 'elisa.santovito@cnr.it'
+        msg['To'] = 'elisa.santovito@cnr.it'
+
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        server.login('elisa.santovito@cnr.it', "your_email_app_password")
+        server.send_message(msg)
+        server.quit()
+    except Exception as e:
+        st.error(f"Error sending email: {e}")
+
+# ----- STREAMLIT APP LOGIC -----
 st.title("📈 5PL Curve Fitting Web App")
 st.markdown("Paste or enter your fluorescence/time data below. First column should be time (in hours), others are samples.")
+
+# Public access: user enters their name
+user_name = st.text_input("Enter your name:")
+if user_name:
+    st.session_state.username = user_name
+    send_email_notification(user_name)
+    st.success(f"Welcome, {user_name}!")
+else:
+    st.warning("Please enter your name to begin.")
 
 # Input labels
 x_label = st.text_input("X-axis label", value="Time (h)")
@@ -30,7 +57,7 @@ y_label = st.text_input("Y-axis label", value="Signal")
 
 # Dynamic sample data
 num_samples = st.number_input("How many samples do you want to enter?", min_value=1, max_value=20, value=2, step=1)
-sample_data = {"Time": np.arange(0, 4.25, 0.25)}
+sample_data = {"Time": np.arange(0, 4.25, 0.25)}  # Example time data
 labels = []
 
 for i in range(1, num_samples + 1):
@@ -55,7 +82,6 @@ dpi = st.slider("Image resolution (DPI)", min_value=100, max_value=600, value=30
 
 # Storage for results
 fitting_results = []
-all_figs = []
 
 # 5PL Fitting Process
 if st.button("Run Analysis"):
@@ -101,30 +127,38 @@ if st.button("Run Analysis"):
                     "Threshold Time (Tt)": Tt
                 })
 
-                # Plot
-                fig, ax = plt.subplots(figsize=(10, 10))
-                ax.plot(t_fit, y, 'ko', label="Raw Data")
-                ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
-                ax.fill_between(t_fit, ci_low, ci_high, color='blue', alpha=0.2, label="95% CI")
-                ax.axhline(manual_thresh, color='green', linestyle='-', linewidth=2, label="Threshold")
-                ax.set_title(f"{col} Fit")
-                ax.set_xlabel(x_label, fontweight='bold')
-                ax.set_ylabel(y_label, fontweight='bold')
-                ax.legend(title=f"{col} (Tt = {Tt:.2f} h)" if not np.isnan(Tt) else col)
-                all_figs.append((fig, col))
-                st.pyplot(fig)
+                # Create Plotly Plot
+                fig = go.Figure()
 
-                # Download individual plot
-                buffer = BytesIO()
-                fig.savefig(buffer, format=fmt, dpi=dpi)
-                buffer.seek(0)
+                # Add raw data
+                fig.add_trace(go.Scatter(x=t_fit, y=y, mode='markers', name="Raw Data", marker=dict(color='black')))
 
-                st.download_button(
-                    label=f"📥 Download Fit Plot for {col}",
-                    data=buffer.getvalue(),
-                    file_name=f"{col}_fit_plot.{fmt}",
-                    mime=f"image/{fmt}"
+                # Add fitted curve
+                fig.add_trace(go.Scatter(x=t_fit, y=y_fit, mode='lines', name="5PL Fit", line=dict(color='blue')))
+
+                # Add 95% Confidence Interval
+                fig.add_trace(go.Scatter(x=t_fit, y=ci_low, mode='lines', name="95% CI Low", line=dict(color='red', dash='dot')))
+                fig.add_trace(go.Scatter(x=t_fit, y=ci_high, mode='lines', name="95% CI High", line=dict(color='red', dash='dot')))
+
+                # Add threshold line
+                fig.add_trace(go.Scatter(x=t_fit, y=np.full_like(t_fit, manual_thresh), mode='lines', name="Threshold", line=dict(color='green', dash='solid')))
+
+                # Update layout
+                fig.update_layout(
+                    title=f"{col} Fit",
+                    xaxis_title=x_label,
+                    yaxis_title=y_label,
+                    hovermode="closest",
+                    showlegend=True
                 )
+
+                st.plotly_chart(fig)
+
+                # Display fitting parameters
+                st.write(f"Fitting Results for {col}:")
+                st.write(f"- R²: {r2:.4f}")
+                st.write(f"- Parameters: {popt}")
+                st.write(f"- Threshold Time (Tt): {Tt:.2f} hours")
 
             except Exception as e:
                 st.error(f"❌ Could not fit {col}: {e}")
@@ -143,18 +177,3 @@ if st.button("Run Analysis"):
             file_name="fitting_results.csv",
             mime="text/csv"
         )
-
-# Merged Plot
-if st.button("Generate Merged Plot"):
-    if not all_figs:
-        st.error("❌ No plots available. Run the analysis first.")
-    else:
-        fig, ax = plt.subplots(figsize=(12, 10))
-        for fig_data, col in all_figs:
-            ax = fig_data.axes[0]
-            ax.plot(ax.lines[0].get_xdata(), ax.lines[0].get_ydata(), label=col)  # Add each curve
-        ax.legend()
-        ax.set_title("Merged Fit Plot")
-        ax.set_xlabel(x_label, fontweight="bold")
-        ax.set_ylabel(y_label, fontweight="bold")
-        st.pyplot(fig)
