@@ -130,7 +130,7 @@ if st.button("Run Analysis"):
             buf.seek(0)
             all_figs.append((f"{col}_fit_plot.{fmt}", buf.read()))
 
-                            try:
+            try:
                     dy_dp = np.array([
                         (inverse_5pl(threshold, *(popt + np.eye(len(popt))[j] * 1e-5)) - t_thresh) / 1e-5
                         for j in range(len(popt))
