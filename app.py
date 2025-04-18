@@ -199,6 +199,24 @@ if st.button("Run Analysis"):
             file_name="excel_formulas.csv",
             mime="text/csv"
         )
+
+        # Optional: ZIP download button
+        with ZipFile(zip_buffer, 'w') as zipf:
+            for name, image_bytes in all_figs:
+                zipf.writestr(name, image_bytes)
+            zipf.writestr("fitting_parameters.csv", df_csv.to_csv(index=False))
+            zipf.writestr("excel_formulas.csv", df_formulas.to_csv(index=False))
+
+        zip_buffer.seek(0)
+        st.download_button(
+            label="📦 Download All Results (ZIP)",
+            data=zip_buffer,
+            file_name="5pl_fitting_outputs.zip",
+            mime="application/zip"
+        ),
+            file_name="excel_formulas.csv",
+            mime="text/csv"
+        )
             label="📦 Download All Results (ZIP)",
             data=zip_buffer,
             file_name="5pl_fitting_outputs.zip",
