@@ -130,24 +130,24 @@ if st.button("Run Analysis"):
             buf.seek(0)
             all_figs.append((f"{col}_fit_plot.{fmt}", buf.read()))
 
-        try:
-            dy_dp = np.array([
+            try:
+                dy_dp = np.array([
                     (inverse_5pl(threshold, *(popt + np.eye(len(popt))[j] * 1e-5)) - t_thresh) / 1e-5
                     for j in range(len(popt))
                 ])
                 t_thresh_var = np.dot(dy_dp, np.dot(pcov, dy_dp))
                 t_thresh_se = np.sqrt(t_thresh_var)
-                                    except:
-            t_thresh_se = np.nan
-        all_csv_rows.append([col, a, d, c, b, g, r2, t_thresh, t_thresh_se])
-        all_formulas.append([col,
-            f"= {d:.6f} + ({a:.6f} - {d:.6f}) / (1 + (t / {c:.6f})^{b:.6f})^{g:.6f}",
-            f"= {c:.6f} * ((({a:.6f} - {d:.6f}) / (y - {d:.6f}))^(1/{g:.6f}) - 1)^(1/{b:.6f})"])
+            except:
+                t_thresh_se = np.nan
+            all_csv_rows.append([col, a, d, c, b, g, r2, t_thresh, t_thresh_se])
+            all_formulas.append([col,
+                f"= {d:.6f} + ({a:.6f} - {d:.6f}) / (1 + (t / {c:.6f})^{b:.6f})^{g:.6f}",
+                f"= {c:.6f} * ((({a:.6f} - {d:.6f}) / (y - {d:.6f}))^(1/{g:.6f}) - 1)^(1/{b:.6f})"])
 
         except Exception as e:
             st.error(f"❌ Could not fit {col}: {e}")
 
- if all_figs:
+    if all_figs:
         # Prepare combined DataFrame of fits with CI and raw data
         combined_data = []
         for row in all_csv_rows:
@@ -185,18 +185,18 @@ if st.button("Run Analysis"):
     df_csv = pd.DataFrame(all_csv_rows, columns=["Sample", "a", "d", "c", "b", "g", "R2", "Threshold Time", "Tt StdErr"])
     df_formulas = pd.DataFrame(all_formulas, columns=["Sample", "Excel 5PL", "Inverse 5PL"])
     df_summary = pd.merge(df_csv, df_formulas, on="Sample")
-    param_buffer = BytesIO()
-    df_summary.to_csv(param_buffer, index=False)
-    param_buffer.seek(0)
-    zip_params = BytesIO()
-df_summary.to_csv(zip_params, index=False)
-zip_params.seek(0)
-zipf.writestr("fitting_parameters_summary.csv", zip_params.getvalue())
-zipf.close()
+            param_buffer = BytesIO()
+        df_summary.to_csv(param_buffer, index=False)
+        param_buffer.seek(0)
+        zip_params = BytesIO()
+        df_summary.to_csv(zip_params, index=False)
+        zip_params.seek(0)
+        zipf.writestr("fitting_parameters_summary.csv", zip_params.getvalue())
+        zipf.close()
 
 st.download_button(
     label="📦 Download All Results (ZIP File)",
     data=zip_buffer.getvalue(),
-    file_name="5pl_results_bundle.zip",
+    file_name=f"5pl_results_bundle_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
     mime="application/zip"
 )
