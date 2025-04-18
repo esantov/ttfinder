@@ -111,18 +111,18 @@ if st.button("Run Analysis"):
             st.write(f"- R²: {r2:.4f}")
             st.write(f"- Threshold: {threshold:.2f} ➜ Time ≈ {t_thresh:.2f} h")
 
-            fig, ax = plt.subplots(figsize=(8, 8))
+            fig, ax = plt.subplots(figsize=(8, 4))
             ax.plot(t_fit, y, 'ko', label="Raw Data")
             ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
             ci_low, ci_high = zip(*ci)
             ax.plot(t_fit, ci_low, 'r--', linewidth=1, label="95% CI")
             ax.plot(t_fit, ci_high, 'r--', linewidth=1)
-            ax.axhline(threshold, color='green', linestyle='--', linewidth=1, label="Threshold")
+                                    ax.axhline(threshold, color='green', linestyle='--', linewidth=1, label="Threshold")
             ax.set_title(f"{col} Fit")
             ax.set_xlabel(x_label, fontweight='bold')
             ax.set_ylabel(y_label, fontweight='bold')
             ax.legend()
-            ax.grid(False)
+            ax.grid(True)
             st.pyplot(fig)
 
             # Save for ZIP
@@ -140,26 +140,9 @@ if st.button("Run Analysis"):
             st.error(f"❌ Could not fit {col}: {e}")
 
     if all_figs:
-        # Automatically generate merged plot
-        fig_all, ax_all = plt.subplots(figsize=(10, 6))
-        for row in all_csv_rows:
-            sample, a, d, c, b, g, r2, t_thresh = row
-            y_merged = logistic_5pl(time, a, d, c, b, g)
-            ax_all.plot(time, y_merged, label=sample)
-        ax_all.axhline(manual_thresh, color='green', linestyle='--', linewidth=1, label="Threshold")
-        ax_all.set_title("Overlay of All Fitted Curves")
-        ax_all.set_xlabel(x_label, fontweight='bold')
-        ax_all.set_ylabel(y_label, fontweight='bold')
-        ax_all.legend()
-        ax_all.grid(False)
-               
-        st.pyplot(fig_all)
+        
 
-        # Save merged plot to ZIP
-        merged_buf = BytesIO()
-        fig_all.savefig(merged_buf, format=fmt, dpi=dpi, bbox_inches='tight')
-        merged_buf.seek(0)
-        all_figs.append((f"merged_plot.{fmt}", merged_buf.read()))
+        
 
         for name, image_bytes in all_figs:
             st.download_button(
@@ -189,6 +172,7 @@ if st.button("Run Analysis"):
             for name, image_bytes in all_figs:
                 zipf.writestr(name, image_bytes)
             zipf.writestr("fitting_parameters.csv", df_csv.to_csv(index=False))
+            zipf.writestr("fitted_curves_with_ci.csv", df_combined.to_csv(index=False))
             zipf.writestr("excel_formulas.csv", df_formulas.to_csv(index=False))
 
         zip_buffer.seek(0)
