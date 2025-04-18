@@ -9,6 +9,10 @@ import smtplib
 from email.mime.text import MIMEText
 from io import BytesIO
 import datetime
+import matplotlib.pyplot as plt
+import os
+from zipfile import ZipFile
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 # ----- EMAIL ALERT FUNCTION -----
 def send_notification(username):
@@ -19,7 +23,7 @@ def send_notification(username):
         msg['To'] = 'elisa.santovito@cnr.it'
 
         server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        server.login('elisa.santovito@cnr.it', "your_email_app_password")  # Replace with actual app password or use env variable
+        server.login('elisa.santovito@cnr.it', "your_email_app_password")
         server.send_message(msg)
         server.quit()
     except Exception as e:
@@ -28,7 +32,7 @@ def send_notification(username):
 # ----- PUBLIC ACCESS -----
 if "rerun" in st.session_state and st.session_state.rerun:
     st.session_state.rerun = False
-    st.stop()  # allow Streamlit to rerun naturally
+    st.stop()
 
 if "login_log" not in st.session_state:
     st.session_state.login_log = []
@@ -57,16 +61,12 @@ with st.sidebar:
 x_label = st.text_input("X-axis label", value="Time (h)")
 y_label = st.text_input("Y-axis label", value="Signal")
 
-import matplotlib.pyplot as plt
-
 st.title("📈 5PL Curve Fitting Web App")
 st.markdown("Paste or enter your fluorescence/time data below. First column should be time (in hours), others are samples.")
 
 num_samples = st.number_input("How many samples do you want to enter?", min_value=1, max_value=20, value=2, step=1)
 
-sample_data = {
-    "Time": np.arange(0, 4.25, 0.25)
-}
+sample_data = {"Time": np.arange(0, 4.25, 0.25)}
 labels = []
 for i in range(1, num_samples + 1):
     default_label = f"Sample{i}"
@@ -77,7 +77,7 @@ for i in range(1, num_samples + 1):
     sample_data[label] = np.linspace(1 + i, 25 - i, 17)
 
 example_data = pd.DataFrame(sample_data)
-# Option to upload or paste data
+
 uploaded_file = st.file_uploader("Upload a CSV file (wide format, first column = Time)", type="csv")
 if uploaded_file is not None:
     data = pd.read_csv(uploaded_file)
@@ -88,6 +88,10 @@ else:
 auto_thresh = st.checkbox("Auto threshold (50% of max)", value=True)
 manual_thresh = st.number_input("Or enter manual threshold:", min_value=0.0, value=3.0, step=0.1)
 
+fmt = st.selectbox("Select image format for download", options=["png", "jpeg", "svg", "pdf"], index=0)
+dpi = st.slider("Image resolution (DPI)", min_value=100, max_value=600, value=300, step=50)
+
+# 5PL functions
 def logistic_5pl(t, a, d, c, b, g):
     return d + (a - d) / (1 + (t / c)**b)**g
 
@@ -98,7 +102,6 @@ def inverse_5pl(y, a, d, c, b, g):
     except:
         return np.nan
 
-from zipfile import ZipFile
 all_figs = []
 all_csv_rows = []
 all_formulas = []
@@ -140,11 +143,8 @@ if st.button("Run Analysis"):
             st.markdown(f"**{col}**")
             st.write(f"- R²: {r2:.4f}")
             st.write(f"- Threshold: {threshold:.2f} ➜ Time ≈ {t_thresh:.2f} h")
-            all_csv_rows.append([col, a, d, c, b, g, r2, t_thresh])
-            all_formulas.append([col, f"= {d:.6f} + ({a:.6f} - {d:.6f}) / (1 + (t / {c:.6f})^{b:.6f})^{g:.6f}", f"= {c:.6f} * ((({a:.6f} - {d:.6f}) / (y - {d:.6f}))^(1/{g:.6f}) - 1)^(1/{b:.6f})"])
 
-                        fig, ax = plt.subplots(figsize=(8, 4))
-            all_figs.append((fig, f"{col}_fit_plot.{fmt}"))
+            fig, ax = plt.subplots(figsize=(8, 4))
             ax.plot(t_fit, y, 'ko', label="Raw Data")
             ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
             ci_low, ci_high = zip(*ci)
@@ -159,24 +159,48 @@ if st.button("Run Analysis"):
             ax.set_ylabel(y_label, fontweight='bold')
             ax.legend()
             ax.grid(True)
-            import os
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+            st.pyplot(fig)
 
-fmt = st.selectbox("Select image format for download", options=["png", "jpeg", "svg", "pdf"], index=0)
-dpi = st.slider("Image resolution (DPI)", min_value=100, max_value=600, value=300, step=50)
+            # Save for ZIP
+            buf = BytesIO()
+            fig.savefig(buf, format=fmt, dpi=dpi, bbox_inches='tight')
+            buf.seek(0)
+            all_figs.append((f"{col}_fit_plot.{fmt}", buf.read()))
 
-# Save plot to buffer and enable download
-img_buf = BytesIO()
-fig.savefig(img_buf, format=fmt, dpi=dpi, bbox_inches='tight')
-img_buf.seek(0)
-st.download_button(
-    label=f"📥 Download Plot as .{fmt}",
-    data=img_buf,
-    file_name=f"{col}_fit_plot.{fmt}",
-    mime=f"image/{'svg+xml' if fmt=='svg' else fmt}"
-)
-st.pyplot(fig)
-# end of individual sample plot
+            all_csv_rows.append([col, a, d, c, b, g, r2, t_thresh])
+            all_formulas.append([col,
+                f"= {d:.6f} + ({a:.6f} - {d:.6f}) / (1 + (t / {c:.6f})^{b:.6f})^{g:.6f}",
+                f"= {c:.6f} * ((({a:.6f} - {d:.6f}) / (y - {d:.6f}))^(1/{g:.6f}) - 1)^(1/{b:.6f})"])
 
         except Exception as e:
             st.error(f"❌ Could not fit {col}: {e}")
+
+    if all_figs:
+        for name, image_bytes in all_figs:
+            st.download_button(
+                label=f"📥 Download {name}",
+                data=image_bytes,
+                file_name=name,
+                mime=f"image/{'svg+xml' if fmt=='svg' else fmt}"
+            )
+
+        df_csv = pd.DataFrame(all_csv_rows, columns=["Sample", "a", "d", "c", "b", "g", "R2", "Threshold Time"])
+        st.download_button(
+            label="📄 Download Fitting Parameters (CSV)",
+            data=df_csv.to_csv(index=False),
+            file_name="fitting_parameters.csv",
+            mime="text/csv"
+        )
+
+        df_formulas = pd.DataFrame(all_formulas, columns=["Sample", "Excel 5PL", "Inverse 5PL"])
+        st.download_button(
+            label="📄 Download Excel Formulas (CSV)",
+            data=df_formulas.to_csv(index=False),
+            file_name="excel_formulas.csv",
+            mime="text/csv"
+        )
+            label="📦 Download All Results (ZIP)",
+            data=zip_buffer,
+            file_name="5pl_fitting_outputs.zip",
+            mime="application/zip"
+        )
