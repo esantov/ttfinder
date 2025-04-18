@@ -95,6 +95,9 @@ dpi = st.slider("Image resolution (DPI)", min_value=100, max_value=600, value=30
 def logistic_5pl(t, a, d, c, b, g):
     return d + (a - d) / (1 + (t / c)**b)**g
 
+def linear_fit(t, m, b):
+    return m * t + b
+
 def inverse_5pl(y, a, d, c, b, g):
     try:
         base = ((a - d) / (y - d))**(1 / g) - 1
@@ -114,51 +117,59 @@ if st.button("Run Analysis"):
     for col in data.columns[1:]:
         y = data[col].dropna().values
         t_fit = time[:len(y)]
+        
         try:
-            popt, pcov = curve_fit(logistic_5pl, t_fit, y, p0=[min(y), max(y), np.median(t_fit), 1, 1], maxfev=10000)
-            y_fit = logistic_5pl(t_fit, *popt)
-            r2 = r2_score(y, y_fit)
-            a, d, c, b, g = popt
+            # Logistic Fit
+            popt_logistic, _ = curve_fit(logistic_5pl, t_fit, y, p0=[min(y), max(y), np.median(t_fit), 1, 1], maxfev=10000)
+            y_fit_logistic = logistic_5pl(t_fit, *popt_logistic)
+            r2_logistic = r2_score(y, y_fit_logistic)
 
-            dof = max(0, len(t_fit) - len(popt))
+            # Linear Fit
+            popt_linear, _ = curve_fit(linear_fit, t_fit, y)
+            y_fit_linear = linear_fit(t_fit, *popt_linear)
+            r2_linear = r2_score(y, y_fit_linear)
+
+            # Compare fits
+            if r2_linear > r2_logistic:
+                st.write(f"**{col}**: The linear fit is better. Tt is not reached in the given time interval.")
+                continue
+
+            a, d, c, b, g = popt_logistic
+
+            dof = max(0, len(t_fit) - len(popt_logistic))
             alpha = 0.05
             tval = t.ppf(1.0 - alpha / 2., dof)
-            mse = np.sum((y - y_fit)**2) / dof
+            mse = np.sum((y - y_fit_logistic)**2) / dof
 
             ci = []
-            pi = []
             for i in range(len(t_fit)):
                 dy_dx = np.array([
-                    (logistic_5pl(t_fit[i], *(popt + np.eye(len(popt))[j]*1e-5)) - y_fit[i]) / 1e-5
-                    for j in range(len(popt))
+                    (logistic_5pl(t_fit[i], *(popt_logistic + np.eye(len(popt_logistic))[j]*1e-5)) - y_fit_logistic[i]) / 1e-5
+                    for j in range(len(popt_logistic))
                 ])
-                se = np.sqrt(np.dot(dy_dx, np.dot(pcov, dy_dx)))
+                se = np.sqrt(np.dot(dy_dx, np.dot(_, dy_dx)))
                 delta = tval * se
-                ci.append((y_fit[i] - delta, y_fit[i] + delta))
-                pi.append((y_fit[i] - delta*np.sqrt(1 + 1/len(t_fit)), y_fit[i] + delta*np.sqrt(1 + 1/len(t_fit))))
+                ci.append((y_fit_logistic[i] - delta, y_fit_logistic[i] + delta))
 
-            threshold = (max(y_fit) * 0.5) if auto_thresh else manual_thresh
+            threshold = (max(y_fit_logistic) * 0.5) if auto_thresh else manual_thresh
             t_thresh = inverse_5pl(threshold, a, d, c, b, g)
 
             st.markdown(f"**{col}**")
-            st.write(f"- R²: {r2:.4f}")
+            st.write(f"- R² (Logistic): {r2_logistic:.4f}")
             st.write(f"- Threshold: {threshold:.2f} ➜ Time ≈ {t_thresh:.2f} h")
 
-            fig, ax = plt.subplots(figsize=(8, 4))
+            fig, ax = plt.subplots(figsize=(8, 8))
             ax.plot(t_fit, y, 'ko', label="Raw Data")
-            ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
+            ax.plot(t_fit, y_fit_logistic, 'b-', label="5PL Fit")
             ci_low, ci_high = zip(*ci)
-            pi_low, pi_high = zip(*pi)
-            ax.plot(t_fit, ci_low, 'b--', linewidth=1, label="95% CI")
-            ax.plot(t_fit, ci_high, 'b--', linewidth=1)
-            ax.plot(t_fit, pi_low, 'r:', linewidth=1, label="95% PI")
-            ax.plot(t_fit, pi_high, 'r:', linewidth=1)
-            ax.axhline(threshold, color='red', linestyle='--', linewidth=1, label="Threshold")
+            ax.plot(t_fit, ci_low, 'r:', linewidth=1, label="95% CI")
+            ax.plot(t_fit, ci_high, 'r:', linewidth=1)
+            ax.axhline(threshold, color='green', linestyle='-', linewidth=2, label="Threshold")
             ax.set_title(f"{col} Fit")
             ax.set_xlabel(x_label, fontweight='bold')
             ax.set_ylabel(y_label, fontweight='bold')
             ax.legend()
-            ax.grid(False)
+            ax.grid(False)  # Disable gridlines
             st.pyplot(fig)
 
             # Save for ZIP
@@ -167,7 +178,7 @@ if st.button("Run Analysis"):
             buf.seek(0)
             all_figs.append((f"{col}_fit_plot.{fmt}", buf.read()))
 
-            all_csv_rows.append([col, a, d, c, b, g, r2, t_thresh])
+            all_csv_rows.append([col, a, d, c, b, g, r2_logistic, t_thresh])
             all_formulas.append([col,
                 f"= {d:.6f} + ({a:.6f} - {d:.6f}) / (1 + (t / {c:.6f})^{b:.6f})^{g:.6f}",
                 f"= {c:.6f} * ((({a:.6f} - {d:.6f}) / (y - {d:.6f}))^(1/{g:.6f}) - 1)^(1/{b:.6f})"])
