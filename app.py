@@ -200,7 +200,7 @@ st.download_button(
     file_name="5pl_results_bundle.zip",
     mime="application/zip"
 )
-                ",
+            ",
             data=param_buffer,
             file_name="fitting_parameters_summary.csv",
             mime="text/csv"
