@@ -117,6 +117,11 @@ if st.button("Run Analysis"):
     for col in data.columns[1:]:
         y = data[col].dropna().values
         t_fit = time[:len(y)]
+
+        # Ensure time and y have the same length
+        if len(t_fit) != len(y):
+            st.error(f"❌ Sample '{col}' has mismatched time and data lengths.")
+            continue
         
         try:
             # Logistic Fit
