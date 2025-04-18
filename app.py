@@ -94,7 +94,6 @@ if st.button("Run Analysis"):
             mse = np.sum((y - y_fit)**2) / dof
 
             ci = []
-            ci = []
             for i in range(len(t_fit)):
                 dy_dx = np.array([
                     (logistic_5pl(t_fit[i], *(popt + np.eye(len(popt))[j]*1e-5)) - y_fit[i]) / 1e-5
@@ -160,41 +159,12 @@ if st.button("Run Analysis"):
                 })
         df_combined = pd.DataFrame(combined_data)
 
-for name, image_bytes in all_figs:
-            st.download_button(
+    for name, image_bytes in all_figs:
+        st.download_button(
                 label=f"📥 Download {name}",
                 data=image_bytes,
                 file_name=name,
                 mime=f"image/{'svg+xml' if fmt=='svg' else fmt}"
             )
 
-        df_csv = pd.DataFrame(all_csv_rows, columns=["Sample", "a", "d", "c", "b", "g", "R2", "Threshold Time"])
-        st.download_button(
-            label="📄 Download Fitting Parameters (CSV)",
-            data=df_csv.to_csv(index=False),
-            file_name="fitting_parameters.csv",
-            mime="text/csv"
-        )
-
-        df_formulas = pd.DataFrame(all_formulas, columns=["Sample", "Excel 5PL", "Inverse 5PL"])
-        st.download_button(
-            label="📄 Download Excel Formulas (CSV)",
-            data=df_formulas.to_csv(index=False),
-            file_name="excel_formulas.csv",
-            mime="text/csv"
-        )
-
-        with ZipFile(zip_buffer, 'w') as zipf:
-            for name, image_bytes in all_figs:
-                zipf.writestr(name, image_bytes)
-            zipf.writestr("fitting_parameters.csv", df_csv.to_csv(index=False))
-            zipf.writestr("fitted_curves_with_ci.csv", df_combined.to_csv(index=False))
-            zipf.writestr("excel_formulas.csv", df_formulas.to_csv(index=False))
-
-        zip_buffer.seek(0)
-        st.download_button(
-            label="📦 Download All Results (ZIP)",
-            data=zip_buffer,
-            file_name="5pl_fitting_outputs.zip",
-            mime="application/zip"
-        )
+            df_csv = pd.DataFrame(all_csv_rows, columns=["Sample", "a", "d", "c", "b", "g", "R2", "Threshold Time"])
