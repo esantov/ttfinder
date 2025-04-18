@@ -63,6 +63,7 @@ y_label = st.text_input("Y-axis label", value="Signal")
 st.title("📈 5PL Curve Fitting Web App")
 st.markdown("Paste or enter your fluorescence/time data below. First column should be time (in hours), others are samples.")
 
+# Handle the dynamic number of samples properly
 num_samples = st.number_input("How many samples do you want to enter?", min_value=1, max_value=20, value=2, step=1)
 
 sample_data = {"Time": np.arange(0, 4.25, 0.25)}
@@ -113,12 +114,11 @@ if st.button("Run Analysis"):
     st.subheader("📊 Results")
     time = data.iloc[:, 0].dropna().values
 
-    # Ensure proper alignment of time and y values
     for col in data.columns[1:]:
         y = data[col].dropna().values
         t_fit = time[:len(y)]
 
-        # Skip if there is any mismatch in the lengths of time and y
+        # Ensure time and y have the same length
         if len(t_fit) != len(y):
             st.error(f"❌ Sample '{col}' has mismatched time and data lengths.")
             continue
