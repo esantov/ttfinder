@@ -103,7 +103,7 @@ if st.button("Run Analysis"):
                 fig, ax = plt.subplots(figsize=(10, 10))
                 ax.plot(t_fit, y, 'ko', label="Raw Data")
                 ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
-                ax.fill_between(t_fit, ci_low, ci_high, color='gray', alpha=0.2, label="95% CI")
+               ax.fill_between(t_fit, ci_low, ci_high, color='blue', alpha=0.3, label="95% CI")
                 ax.axhline(manual_thresh, color='green', linestyle='-', linewidth=2, label="Threshold")
                 ax.set_title(f"{col} Fit")
                 ax.set_xlabel(x_label, fontweight='bold')
@@ -133,7 +133,10 @@ if st.button("Run Analysis"):
             [{"Sample": res["Sample"], "R²": res["R²"], "Threshold Time (Tt)": res["Threshold Time (Tt)"], **dict(zip(["a", "d", "c", "b", "g"], res["Parameters"]))} for res in fitting_results]
         )
         st.dataframe(params_table)
-
+# Debugging: Print parameter errors and confidence interval bounds
+st.write("Parameter Errors:", param_errors)
+st.write("CI Low:", ci_low)
+st.write("CI High:", ci_high)
         # Export fitting data
         st.download_button(
             label="📥 Export Fitting Data",
