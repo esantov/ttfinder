@@ -167,4 +167,4 @@ if st.button("Run Analysis"):
                 mime=f"image/{'svg+xml' if fmt=='svg' else fmt}"
             )
 
-            df_csv = pd.DataFrame(all_csv_rows, columns=["Sample", "a", "d", "c", "b", "g", "R2", "Threshold Time"])
+        df_csv = pd.DataFrame(all_csv_rows, columns=["Sample", "a", "d", "c", "b", "g", "R2", "Threshold Time"])
