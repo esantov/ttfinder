@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -114,11 +113,12 @@ if st.button("Run Analysis"):
     st.subheader("📊 Results")
     time = data.iloc[:, 0].dropna().values
 
+    # Ensure proper alignment of time and y values
     for col in data.columns[1:]:
         y = data[col].dropna().values
         t_fit = time[:len(y)]
 
-        # Ensure time and y have the same length
+        # Skip if there is any mismatch in the lengths of time and y
         if len(t_fit) != len(y):
             st.error(f"❌ Sample '{col}' has mismatched time and data lengths.")
             continue
