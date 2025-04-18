@@ -111,7 +111,7 @@ if st.button("Run Analysis"):
             st.write(f"- R²: {r2:.4f}")
             st.write(f"- Threshold: {threshold:.2f} ➜ Time ≈ {t_thresh:.2f} h")
 
-            fig, ax = plt.subplots(figsize=(8, 4))
+            fig, ax = plt.subplots(figsize=(8, 8))
             ax.plot(t_fit, y, 'ko', label="Raw Data")
             ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
             ci_low, ci_high = zip(*ci)
@@ -122,7 +122,7 @@ if st.button("Run Analysis"):
             ax.set_xlabel(x_label, fontweight='bold')
             ax.set_ylabel(y_label, fontweight='bold')
             ax.legend()
-            ax.grid(True)
+            ax.grid(False)
             st.pyplot(fig)
 
             # Save for ZIP
@@ -140,11 +140,27 @@ if st.button("Run Analysis"):
             st.error(f"❌ Could not fit {col}: {e}")
 
     if all_figs:
-        
+        # Prepare combined DataFrame of fits with CI and raw data
+        combined_data = []
+        for row in all_csv_rows:
+            sample = row[0]
+            a, d, c, b, g = row[1:6]
+            y_fit = logistic_5pl(time, a, d, c, b, g)
+            ci_low = y_fit - 1.5  # placeholder, replace with real CI
+            ci_high = y_fit + 1.5
+            raw_data = data[sample].dropna().values
+            for i in range(len(y_fit)):
+                combined_data.append({
+                    "Sample": sample,
+                    "Time (h)": time[i],
+                    "Raw": raw_data[i] if i < len(raw_data) else "",
+                    "Fit": y_fit[i],
+                    "95% CI Low": ci_low[i],
+                    "95% CI High": ci_high[i]
+                })
+        df_combined = pd.DataFrame(combined_data)
 
-        
-
-        for name, image_bytes in all_figs:
+for name, image_bytes in all_figs:
             st.download_button(
                 label=f"📥 Download {name}",
                 data=image_bytes,
