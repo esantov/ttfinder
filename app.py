@@ -15,6 +15,8 @@ def debug_data_state(time, y, sample_label):
     st.write(f"Time: {time}")
     st.write(f"Y values: {y}")
     st.write(f"Data length check: Time length = {len(time)}, Y length = {len(y)}")
+    st.write(f"NaN check for Time: {np.isnan(time).sum()} NaNs in Time")
+    st.write(f"NaN check for Y: {np.isnan(y).sum()} NaNs in Y")
 
 # ----- APP LOGIC -----
 x_label = st.text_input("X-axis label", value="Time (h)")
@@ -23,6 +25,7 @@ y_label = st.text_input("Y-axis label", value="Signal")
 st.title("📈 5PL Curve Fitting Web App")
 st.markdown("Paste or enter your fluorescence/time data below. First column should be time (in hours), others are samples.")
 
+# Handle the dynamic number of samples properly
 num_samples = st.number_input("How many samples do you want to enter?", min_value=1, max_value=20, value=2, step=1)
 
 # Sample data: We'll keep it simple for now
@@ -70,34 +73,37 @@ if st.button("Run Analysis"):
         
         try:
             # Logistic Fit
-            popt_logistic, _ = curve_fit(logistic_5pl, t_fit, y, p0=[min(y), max(y), np.median(t_fit), 1, 1], maxfev=10000)
-            y_fit_logistic = logistic_5pl(t_fit, *popt_logistic)
-            r2_logistic = np.corrcoef(y, y_fit_logistic)[0, 1]**2  # Compute R^2 manually
+            if len(t_fit) > 1:  # Ensure we have enough data points to fit
+                popt_logistic, _ = curve_fit(logistic_5pl, t_fit, y, p0=[min(y), max(y), np.median(t_fit), 1, 1], maxfev=10000)
+                y_fit_logistic = logistic_5pl(t_fit, *popt_logistic)
+                r2_logistic = np.corrcoef(y, y_fit_logistic)[0, 1]**2  # Compute R^2 manually
 
-            # Plot Results
-            fig, ax = plt.subplots(figsize=(10, 10))
-            ax.plot(t_fit, y, 'ko', label="Raw Data")
-            ax.plot(t_fit, y_fit_logistic, 'b-', label="5PL Fit")
-            ax.axhline(auto_thresh and (max(y_fit_logistic) * 0.5) or manual_thresh, color='green', linestyle='-', linewidth=2, label="Threshold")
-            ax.set_title(f"{col} Fit")
-            ax.set_xlabel(x_label, fontweight='bold')
-            ax.set_ylabel(y_label, fontweight='bold')
-            ax.legend()
-            ax.grid(False)
-            st.pyplot(fig)
+                # Plot Results
+                fig, ax = plt.subplots(figsize=(10, 10))
+                ax.plot(t_fit, y, 'ko', label="Raw Data")
+                ax.plot(t_fit, y_fit_logistic, 'b-', label="5PL Fit")
+                ax.axhline(auto_thresh and (max(y_fit_logistic) * 0.5) or manual_thresh, color='green', linestyle='-', linewidth=2, label="Threshold")
+                ax.set_title(f"{col} Fit")
+                ax.set_xlabel(x_label, fontweight='bold')
+                ax.set_ylabel(y_label, fontweight='bold')
+                ax.legend()
+                ax.grid(False)
+                st.pyplot(fig)
 
-            # Prepare for download (Optional: Just showing basic CSV for now)
-            st.download_button(
-                label=f"📥 Download Fit Plot for {col}",
-                data=fig.savefig(BytesIO(), format='png', dpi=dpi),
-                file_name=f"{col}_fit_plot.png",
-                mime="image/png"
-            )
-            
-            # Display fitting parameters
-            st.write(f"Fitting Results for {col}:")
-            st.write(f"- R²: {r2_logistic:.4f}")
-            st.write(f"- Parameters: {popt_logistic}")
+                # Prepare for download (Optional: Just showing basic CSV for now)
+                st.download_button(
+                    label=f"📥 Download Fit Plot for {col}",
+                    data=fig.savefig(BytesIO(), format='png', dpi=dpi),
+                    file_name=f"{col}_fit_plot.png",
+                    mime="image/png"
+                )
+                
+                # Display fitting parameters
+                st.write(f"Fitting Results for {col}:")
+                st.write(f"- R²: {r2_logistic:.4f}")
+                st.write(f"- Parameters: {popt_logistic}")
+            else:
+                st.warning(f"❌ Sample '{col}' has insufficient data for fitting (at least two data points required).")
 
         except Exception as e:
             st.error(f"❌ Could not fit {col}: {e}")
