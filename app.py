@@ -133,10 +133,7 @@ if st.button("Run Analysis"):
             [{"Sample": res["Sample"], "R²": res["R²"], "Threshold Time (Tt)": res["Threshold Time (Tt)"], **dict(zip(["a", "d", "c", "b", "g"], res["Parameters"]))} for res in fitting_results]
         )
         st.dataframe(params_table)
-# Debugging: Print parameter errors and confidence interval bounds
-st.write("Parameter Errors:", param_errors)
-st.write("CI Low:", ci_low)
-st.write("CI High:", ci_high)
+
         # Export fitting data
         st.download_button(
             label="📥 Export Fitting Data",
