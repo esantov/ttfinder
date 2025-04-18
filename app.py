@@ -196,7 +196,7 @@ if st.button("Run Analysis"):
         st.download_button(
             label="📄 Download Excel Formulas (CSV)",
             data=df_formulas.to_csv(index=False),
-
+        )
         # Optional: ZIP download button
         with ZipFile(zip_buffer, 'w') as zipf:
             for name, image_bytes in all_figs:
