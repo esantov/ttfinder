@@ -19,7 +19,7 @@ def send_notification(username):
         msg['To'] = 'elisa.santovito@cnr.it'
 
         server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        server.login('elisa.santovito@cnr.it', "your_email_app_password")  # Replace with actual app password or use secrets
+        server.login('elisa.santovito@cnr.it', "your_email_app_password")  # Replace with actual app password or use env variable
         server.send_message(msg)
         server.quit()
     except Exception as e:
@@ -28,7 +28,7 @@ def send_notification(username):
 # ----- PUBLIC ACCESS -----
 if "rerun" in st.session_state and st.session_state.rerun:
     st.session_state.rerun = False
-    st.stop()
+    st.stop()  # allow Streamlit to rerun naturally
 
 if "login_log" not in st.session_state:
     st.session_state.login_log = []
@@ -53,10 +53,15 @@ with st.sidebar:
         st.experimental_rerun()
 
 # ----- APP LOGIC -----
+
+x_label = st.text_input("X-axis label", value="Time (h)")
+y_label = st.text_input("Y-axis label", value="Signal")
+
+import matplotlib.pyplot as plt
+
 st.title("📈 5PL Curve Fitting Web App")
 st.markdown("Paste or enter your fluorescence/time data below. First column should be time (in hours), others are samples.")
 
-# Sample structure
 example_data = pd.DataFrame({
     "Time": np.arange(0, 4.25, 0.25),
     "Sample1": np.linspace(1, 25, 17),
@@ -64,11 +69,9 @@ example_data = pd.DataFrame({
 })
 data = st.data_editor(example_data, use_container_width=True, num_rows="dynamic")
 
-# Threshold options
 auto_thresh = st.checkbox("Auto threshold (50% of max)", value=True)
 manual_thresh = st.number_input("Or enter manual threshold:", min_value=0.0, value=3.0, step=0.1)
 
-# Define 5PL functions
 def logistic_5pl(t, a, d, c, b, g):
     return d + (a - d) / (1 + (t / c)**b)**g
 
@@ -79,11 +82,9 @@ def inverse_5pl(y, a, d, c, b, g):
     except:
         return np.nan
 
-# Run fitting
 if st.button("Run Analysis"):
     st.subheader("📊 Results")
     time = data.iloc[:, 0].dropna().values
-    export_data = []
 
     for col in data.columns[1:]:
         y = data[col].dropna().values
@@ -97,9 +98,10 @@ if st.button("Run Analysis"):
             dof = max(0, len(t_fit) - len(popt))
             alpha = 0.05
             tval = t.ppf(1.0 - alpha / 2., dof)
-            mse = np.sum((y - y_fit) ** 2) / dof
+            mse = np.sum((y - y_fit)**2) / dof
 
             ci = []
+            pi = []
             for i in range(len(t_fit)):
                 dy_dx = np.array([
                     (logistic_5pl(t_fit[i], *(popt + np.eye(len(popt))[j]*1e-5)) - y_fit[i]) / 1e-5
@@ -108,6 +110,7 @@ if st.button("Run Analysis"):
                 se = np.sqrt(np.dot(dy_dx, np.dot(pcov, dy_dx)))
                 delta = tval * se
                 ci.append((y_fit[i] - delta, y_fit[i] + delta))
+                pi.append((y_fit[i] - delta*np.sqrt(1 + 1/len(t_fit)), y_fit[i] + delta*np.sqrt(1 + 1/len(t_fit))))
 
             threshold = (max(y_fit) * 0.5) if auto_thresh else manual_thresh
             t_thresh = inverse_5pl(threshold, a, d, c, b, g)
@@ -115,35 +118,23 @@ if st.button("Run Analysis"):
             st.markdown(f"**{col}**")
             st.write(f"- R²: {r2:.4f}")
             st.write(f"- Threshold: {threshold:.2f} ➜ Time ≈ {t_thresh:.2f} h")
-            st.code(f"= {d:.6f} + ({a:.6f} - {d:.6f}) / (1 + (t / {c:.6f})^{b:.6f})^{g:.6f}", language='excel')
 
-            chart_data = pd.DataFrame({
-                "Raw": y,
-                "Fit": y_fit[:len(y)],
-                "CI Low": [ci[i][0] for i in range(len(y))],
-                "CI High": [ci[i][1] for i in range(len(y))]
-            }, index=t_fit)
-            st.line_chart(chart_data)
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.plot(t_fit, y, 'ko', label="Raw Data")
+            ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
+            ci_low, ci_high = zip(*ci)
+            pi_low, pi_high = zip(*pi)
+            ax.plot(t_fit, ci_low, 'b--', linewidth=1, label="95% CI")
+            ax.plot(t_fit, ci_high, 'b--', linewidth=1)
+            ax.plot(t_fit, pi_low, 'r:', linewidth=1, label="95% PI")
+            ax.plot(t_fit, pi_high, 'r:', linewidth=1)
+            ax.axhline(threshold, color='red', linestyle='--', linewidth=1, label="Threshold")
+            ax.set_title(f"{col} Fit")
+            ax.set_xlabel(x_label)
+            ax.set_ylabel(y_label)
+            ax.legend()
+            ax.grid(True)
+            st.pyplot(fig)
 
-            for i in range(len(y)):
-                export_data.append({
-                    "Sample": col,
-                    "Time": t_fit[i],
-                    "Raw": y[i],
-                    "Fit": y_fit[i],
-                    "CI Low": ci[i][0],
-                    "CI High": ci[i][1]
-                })
         except Exception as e:
             st.error(f"❌ Could not fit {col}: {e}")
-
-    if export_data:
-        df_export = pd.DataFrame(export_data)
-        buffer = BytesIO()
-        df_export.to_csv(buffer, index=False)
-        st.download_button(
-            label="📥 Download Fitted Data (.csv)",
-            data=buffer.getvalue(),
-            file_name="5PL_fitting_results.csv",
-            mime="text/csv"
-        )
