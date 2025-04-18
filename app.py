@@ -158,7 +158,7 @@ if st.button("Run Analysis"):
             ax.set_xlabel(x_label, fontweight='bold')
             ax.set_ylabel(y_label, fontweight='bold')
             ax.legend()
-            ax.grid(True)
+            ax.grid(False)
             st.pyplot(fig)
 
             # Save for ZIP
@@ -195,7 +195,10 @@ if st.button("Run Analysis"):
         df_formulas = pd.DataFrame(all_formulas, columns=["Sample", "Excel 5PL", "Inverse 5PL"])
         st.download_button(
             label="📄 Download Excel Formulas (CSV)",
-            data=df_formulas.to_csv(index=False
+            data=df_formulas.to_csv(index=False),
+            file_name="excel_formulas.csv",
+            mime="text/csv"
+        )
 
         # Optional: ZIP download button
         with ZipFile(zip_buffer, 'w') as zipf:
