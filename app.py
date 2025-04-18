@@ -14,18 +14,6 @@ import os
 from zipfile import ZipFile
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
-# ----- EMAIL ALERT FUNCTION -----
-def send_notification(username):
-    try:
-        msg = MIMEText(f"User '{username}' just accessed the 5PL web app on {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.")
-        msg['Subject'] = 'New 5PL App Session'
-        msg['From'] = 'elisa.santovito@cnr.it'
-        msg['To'] = 'elisa.santovito@cnr.it'
-
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        server.login('elisa.santovito@cnr.it', "your_email_app_password")
-        server.send_message(msg)
-        server.quit()
     except Exception as e:
         pass
 
@@ -34,27 +22,11 @@ if "rerun" in st.session_state and st.session_state.rerun:
     st.session_state.rerun = False
     st.stop()
 
-if "login_log" not in st.session_state:
     st.session_state.login_log = []
 
-user_email = st.text_input("Enter your email to begin:")
-if st.button("Enter App"):
-    if user_email:
-        st.session_state.username = user_email
-        st.session_state.login_log.append((user_email, str(datetime.datetime.now())))
-        send_notification(user_email)
-        st.session_state.rerun = True
-    else:
-        st.error("❌ Please enter your email")
 
-if "username" not in st.session_state or not st.session_state.username:
     st.stop()
 
-# ----- LOGOUT BUTTON -----
-with st.sidebar:
-    if st.button("🚪 Logout"):
-        st.session_state.username = ""
-        st.experimental_rerun()
 
 # ----- APP LOGIC -----
 
@@ -194,11 +166,8 @@ if st.button("Run Analysis"):
 
         df_formulas = pd.DataFrame(all_formulas, columns=["Sample", "Excel 5PL", "Inverse 5PL"])
         st.download_button(
-    label="📄 Download Excel Formulas (CSV)",
-    data=df_formulas.to_csv(index=False),
-    file_name="excel_formulas.csv",
-    mime="text/csv"
-)
+            label="📄 Download Excel Formulas (CSV)",
+            data=df_formulas.to_csv(index=False),
 
         # Optional: ZIP download button
         with ZipFile(zip_buffer, 'w') as zipf:
