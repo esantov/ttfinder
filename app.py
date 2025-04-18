@@ -152,16 +152,7 @@ if st.button("Run Analysis"):
         ax_all.set_ylabel(y_label, fontweight='bold')
         ax_all.legend()
         ax_all.grid(False)
-                # Add threshold labels to merged plot
-        for row in all_csv_rows:
-            sample, a, d, c, b, g, r2, t_thresh = row
-            y_value = logistic_5pl(t_thresh, a, d, c, b, g)
-            ax_all.annotate(f"{sample}: {t_thresh:.2f} h",
-                            xy=(t_thresh, y_value),
-                            xytext=(t_thresh, y_value + 2),
-                            arrowprops=dict(arrowstyle="->", lw=1),
-                            fontsize=8)
-
+               
         st.pyplot(fig_all)
 
         # Save merged plot to ZIP
