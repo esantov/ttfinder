@@ -99,18 +99,18 @@ if st.button("Run Analysis"):
                     "Threshold Time (Tt)": Tt
                 })
 
-                # Plot
-                fig, ax = plt.subplots(figsize=(10, 10))
-                ax.plot(t_fit, y, 'ko', label="Raw Data")
-                ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
-               ax.fill_between(t_fit, ci_low, ci_high, color='blue', alpha=0.3, label="95% CI")
-                ax.axhline(manual_thresh, color='green', linestyle='-', linewidth=2, label="Threshold")
-                ax.set_title(f"{col} Fit")
-                ax.set_xlabel(x_label, fontweight='bold')
-                ax.set_ylabel(y_label, fontweight='bold')
-                ax.legend(title=f"{col} (Tt = {Tt:.2f} h)" if not np.isnan(Tt) else col)
-                all_figs.append((fig, col))
-                st.pyplot(fig)
+# Plot
+fig, ax = plt.subplots(figsize=(10, 10))
+ax.plot(t_fit, y, 'ko', label="Raw Data")
+ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
+ax.fill_between(t_fit, ci_low, ci_high, color='blue', alpha=0.3, label="95% CI")  # Adjusted indentation
+ax.axhline(manual_thresh, color='green', linestyle='-', linewidth=2, label="Threshold")
+ax.set_title(f"{col} Fit")
+ax.set_xlabel(x_label, fontweight='bold')
+ax.set_ylabel(y_label, fontweight='bold')
+ax.legend(title=f"{col} (Tt = {Tt:.2f} h)" if not np.isnan(Tt) else col)
+all_figs.append((fig, col))
+st.pyplot(fig)
 
                 # Download individual plot
                 buffer = BytesIO()
