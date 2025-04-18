@@ -54,7 +54,6 @@ if uploaded_file is not None:
 else:
     data = st.data_editor(example_data, use_container_width=True, num_rows="dynamic")
 
-auto_thresh = st.checkbox("Auto threshold (10% of max)", value=True)
 manual_thresh = st.number_input("Or enter manual threshold:", min_value=0.0, value=3.0, step=0.1)
 
 fmt = st.selectbox("Select image format for download", options=["png", "jpeg", "svg", "pdf"], index=0)
