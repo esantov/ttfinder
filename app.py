@@ -195,7 +195,7 @@ if st.button("Run Analysis"):
         df_formulas = pd.DataFrame(all_formulas, columns=["Sample", "Excel 5PL", "Inverse 5PL"])
         st.download_button(
             label="📄 Download Excel Formulas (CSV)",
-            data=df_formulas.to_csv(index=False
+            data=df_formulas.to_csv(index=False),
 
         # Optional: ZIP download button
         with ZipFile(zip_buffer, 'w') as zipf:
