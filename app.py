@@ -130,19 +130,19 @@ if st.button("Run Analysis"):
                         buf.seek(0)
             all_figs.append((f"{col}_fit_plot.{fmt}", buf.read()))
 
-            try:
-                dy_dp = np.array([
-                        (inverse_5pl(threshold, *(popt + np.eye(len(popt))[j] * 1e-5)) - t_thresh) / 1e-5
-                        for j in range(len(popt))
-                    ])
-                    t_thresh_var = np.dot(dy_dp, np.dot(pcov, dy_dp))
-                    t_thresh_se = np.sqrt(t_thresh_var)
-                                        except:
-                t_thresh_se = np.nan
-            all_csv_rows.append([col, a, d, c, b, g, r2, t_thresh, t_thresh_se])
-            all_formulas.append([col,
-                f"= {d:.6f} + ({a:.6f} - {d:.6f}) / (1 + (t / {c:.6f})^{b:.6f})^{g:.6f}",
-                f"= {c:.6f} * ((({a:.6f} - {d:.6f}) / (y - {d:.6f}))^(1/{g:.6f}) - 1)^(1/{b:.6f})"])
+        try:
+            dy_dp = np.array([
+                    (inverse_5pl(threshold, *(popt + np.eye(len(popt))[j] * 1e-5)) - t_thresh) / 1e-5
+                    for j in range(len(popt))
+                ])
+                t_thresh_var = np.dot(dy_dp, np.dot(pcov, dy_dp))
+                t_thresh_se = np.sqrt(t_thresh_var)
+                                    except:
+            t_thresh_se = np.nan
+        all_csv_rows.append([col, a, d, c, b, g, r2, t_thresh, t_thresh_se])
+        all_formulas.append([col,
+            f"= {d:.6f} + ({a:.6f} - {d:.6f}) / (1 + (t / {c:.6f})^{b:.6f})^{g:.6f}",
+            f"= {c:.6f} * ((({a:.6f} - {d:.6f}) / (y - {d:.6f}))^(1/{g:.6f}) - 1)^(1/{b:.6f})"])
 
         except Exception as e:
             st.error(f"❌ Could not fit {col}: {e}")
