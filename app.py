@@ -105,14 +105,14 @@ if st.button("Run Analysis"):
                 ci.append((y_fit[i] - delta, y_fit[i] + delta))
                 pi.append((y_fit[i] - delta*np.sqrt(1 + 1/len(t_fit)), y_fit[i] + delta*np.sqrt(1 + 1/len(t_fit))))
 
-            threshold = (max(y_fit) * 0.5) if auto_thresh else manual_thresh
+            threshold = manual_thresh
             t_thresh = inverse_5pl(threshold, a, d, c, b, g)
 
             st.markdown(f"**{col}**")
             st.write(f"- R²: {r2:.4f}")
             st.write(f"- Threshold: {threshold:.2f} ➜ Time ≈ {t_thresh:.2f} h")
 
-            fig, ax = plt.subplots(figsize=(8, 4))
+            fig, ax = plt.subplots(figsize=(8, 8))
             ax.plot(t_fit, y, 'ko', label="Raw Data")
             ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
             ci_low, ci_high = zip(*ci)
