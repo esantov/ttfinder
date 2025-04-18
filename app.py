@@ -110,7 +110,7 @@ if st.button("Run Analysis"):
             st.write(f"- R²: {r2:.4f}")
             st.write(f"- Threshold: {threshold:.2f} ➜ Time ≈ {t_thresh:.2f} h")
 
-            fig, ax = plt.subplots(figsize=(8, 8))
+            fig, ax = plt.subplots(figsize=(8, 4))
             ax.plot(t_fit, y, 'ko', label="Raw Data")
             ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
             ci_low, ci_high = zip(*ci)
@@ -121,7 +121,7 @@ if st.button("Run Analysis"):
             ax.set_xlabel(x_label, fontweight='bold')
             ax.set_ylabel(y_label, fontweight='bold')
             ax.legend()
-            ax.grid(False)
+            ax.grid(True)
             st.pyplot(fig)
 
             # Save for ZIP
@@ -158,6 +158,16 @@ if st.button("Run Analysis"):
                     "95% CI High": ci_high[i]
                 })
         df_combined = pd.DataFrame(combined_data)
+        # Button to download full combined Excel CSV
+        excel_buffer = BytesIO()
+        df_combined.to_csv(excel_buffer, index=False)
+        excel_buffer.seek(0)
+        st.download_button(
+            label="📥 Download Full Combined Data (CSV)",
+            data=excel_buffer,
+            file_name="full_fitting_data.csv",
+            mime="text/csv"
+        )
 
     for name, image_bytes in all_figs:
         st.download_button(
@@ -167,4 +177,4 @@ if st.button("Run Analysis"):
                 mime=f"image/{'svg+xml' if fmt=='svg' else fmt}"
             )
 
-        df_csv = pd.DataFrame(all_csv_rows, columns=["Sample", "a", "d", "c", "b", "g", "R2", "Threshold Time"])
+            df_csv = pd.DataFrame(all_csv_rows, columns=["Sample", "a", "d", "c", "b", "g", "R2", "Threshold Time"])
