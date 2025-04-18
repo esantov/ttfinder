@@ -105,7 +105,17 @@ if st.button("Run Analysis"):
                 
             threshold = manual_thresh
             t_thresh = inverse_5pl(threshold, a, d, c, b, g)
-
+# Calculate standard error for Tt using error propagation
+try:
+    dy_dp = np.array([
+        (inverse_5pl(threshold, *(popt + np.eye(len(popt))[j] * 1e-5)) - t_thresh) / 1e-5
+        for j in range(len(popt))
+    ])
+    t_thresh_var = np.dot(dy_dp, np.dot(pcov, dy_dp))
+    t_thresh_se = np.sqrt(t_thresh_var)
+except:
+    t_thresh_se = np.nan
+    
             st.markdown(f"**{col}**")
             st.write(f"- R²: {r2:.4f}")
             st.write(f"- Threshold: {threshold:.2f} ➜ Time ≈ {t_thresh:.2f} h")
