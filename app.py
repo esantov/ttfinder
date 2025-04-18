@@ -50,13 +50,22 @@ if st.button("Run Analysis"):
     # Extract time data and ensure proper alignment
     time = data.iloc[:, 0].dropna().values
 
+    # Check if there are missing time values
+    if len(time) == 0:
+        st.error("❌ No valid time values found in the first column.")
+    
     for col in data.columns[1:]:
         y = data[col].dropna().values
         t_fit = time[:len(y)]  # Ensure time and y values match in length
 
-        # Check if lengths of time and y match
+        # Validate if time and y lengths match
         if len(t_fit) != len(y):
             st.error(f"❌ Sample '{col}' has mismatched time and data lengths.")
+            continue
+        
+        # Validate that there are no NaN values in time and y
+        if np.any(np.isnan(t_fit)) or np.any(np.isnan(y)):
+            st.error(f"❌ Sample '{col}' contains NaN values in time or data.")
             continue
         
         try:
