@@ -213,7 +213,7 @@ if st.button("Run Analysis"):
             data=zip_buffer,
             file_name="5pl_fitting_outputs.zip",
             mime="application/zip"
-        ),
+        )
             file_name="excel_formulas.csv",
             mime="text/csv"
         )
