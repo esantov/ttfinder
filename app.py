@@ -130,15 +130,15 @@ if st.button("Run Analysis"):
             buf.seek(0)
             all_figs.append((f"{col}_fit_plot.{fmt}", buf.read()))
 
-            try:
-                    dy_dp = np.array([
+                        try:
+                dy_dp = np.array([
                         (inverse_5pl(threshold, *(popt + np.eye(len(popt))[j] * 1e-5)) - t_thresh) / 1e-5
                         for j in range(len(popt))
                     ])
                     t_thresh_var = np.dot(dy_dp, np.dot(pcov, dy_dp))
                     t_thresh_se = np.sqrt(t_thresh_var)
-                except:
-                    t_thresh_se = np.nan
+                            except:
+                t_thresh_se = np.nan
             all_csv_rows.append([col, a, d, c, b, g, r2, t_thresh, t_thresh_se])
             all_formulas.append([col,
                 f"= {d:.6f} + ({a:.6f} - {d:.6f}) / (1 + (t / {c:.6f})^{b:.6f})^{g:.6f}",
@@ -167,16 +167,12 @@ if st.button("Run Analysis"):
                     "95% CI High": ci_high[i]
                 })
         df_combined = pd.DataFrame(combined_data)
-        # Button to download full combined Excel CSV
-        excel_buffer = BytesIO()
-        df_combined.to_csv(excel_buffer, index=False)
-        excel_buffer.seek(0)
-        st.download_button(
-            label="📥 Download Full Combined Data (CSV)",
-            data=excel_buffer,
-            file_name="full_fitting_data.csv",
-            mime="text/csv"
-        )
+        # Save combined data to ZIP
+        zip_combined = BytesIO()
+        df_combined.to_csv(zip_combined, index=False)
+        zip_combined.seek(0)
+        zipf = ZipFile(zip_buffer, 'w')
+        zipf.writestr("full_fitting_data.csv", zip_combined.getvalue())
 
     for name, image_bytes in all_figs:
         st.download_button(
@@ -192,26 +188,19 @@ if st.button("Run Analysis"):
     param_buffer = BytesIO()
     df_summary.to_csv(param_buffer, index=False)
     param_buffer.seek(0)
-    st.download_button(
-        label="📥 Download Fitting Parameters + Formulas (CSV)",
-        data=param_buffer,
-        file_name="fitting_parameters_summary.csv",
-        mime="text/csv"
-    )
-                label=f"📥 Download {name}",
-                data=image_bytes,
-                file_name=name,
-                mime=f"image/{'svg+xml' if fmt=='svg' else fmt}"
-            )
+    zip_params = BytesIO()
+df_summary.to_csv(zip_params, index=False)
+zip_params.seek(0)
+zipf.writestr("fitting_parameters_summary.csv", zip_params.getvalue())
+zipf.close()
 
-            df_csv = pd.DataFrame(all_csv_rows, columns=["Sample", "a", "d", "c", "b", "g", "R2", "Threshold Time", "Tt StdErr"])
-        df_formulas = pd.DataFrame(all_formulas, columns=["Sample", "Excel 5PL", "Inverse 5PL"])
-        df_summary = pd.merge(df_csv, df_formulas, on="Sample")
-        param_buffer = BytesIO()
-        df_summary.to_csv(param_buffer, index=False)
-        param_buffer.seek(0)
-        st.download_button(
-            label="📥 Download Fitting Parameters + Formulas (CSV)",
+st.download_button(
+    label="📦 Download All Results (ZIP)",
+    data=zip_buffer.getvalue(),
+    file_name="5pl_results_bundle.zip",
+    mime="application/zip"
+)
+                ",
             data=param_buffer,
             file_name="fitting_parameters_summary.csv",
             mime="text/csv"
