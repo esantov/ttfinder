@@ -148,6 +148,19 @@ if st.button("Run Analysis"):
         except Exception as e:
             st.error(f"❌ Could not fit {col}: {e}")
 
+        show_table_rows.append({
+            "Sample": col,
+            "a": a,
+            "d": d,
+            "c": c,
+            "b": b,
+            "g": g,
+            "R²": r2,
+            "Tt (h)": t_thresh,
+            "Tt ±95% CI": f"{t_thresh:.2f} ± {1.96 * t_thresh_se:.2f}",
+            "Excel 5PL": all_formulas[-1][1],
+            "Excel Inverse": all_formulas[-1][2]
+        })
     if all_figs:
         # Prepare combined DataFrame of fits with CI and raw data
         combined_data = []
