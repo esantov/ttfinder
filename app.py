@@ -147,7 +147,7 @@ if st.button("Run Analysis"):
         except Exception as e:
             st.error(f"❌ Could not fit {col}: {e}")
 
-    if all_figs:
+ if all_figs:
         # Prepare combined DataFrame of fits with CI and raw data
         combined_data = []
         for row in all_csv_rows:
@@ -195,12 +195,8 @@ zipf.writestr("fitting_parameters_summary.csv", zip_params.getvalue())
 zipf.close()
 
 st.download_button(
-    label="📦 Download All Results (ZIP)",
+    label="📦 Download All Results (ZIP File)",
     data=zip_buffer.getvalue(),
     file_name="5pl_results_bundle.zip",
     mime="application/zip"
 )
-            data=param_buffer,
-            file_name="fitting_parameters_summary.csv",
-            mime="text/csv"
-        )
