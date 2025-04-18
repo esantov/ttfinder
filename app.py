@@ -94,7 +94,7 @@ if st.button("Run Analysis"):
             mse = np.sum((y - y_fit)**2) / dof
 
             ci = []
-            pi = []
+            ci = []
             for i in range(len(t_fit)):
                 dy_dx = np.array([
                     (logistic_5pl(t_fit[i], *(popt + np.eye(len(popt))[j]*1e-5)) - y_fit[i]) / 1e-5
@@ -103,8 +103,7 @@ if st.button("Run Analysis"):
                 se = np.sqrt(np.dot(dy_dx, np.dot(pcov, dy_dx)))
                 delta = tval * se
                 ci.append((y_fit[i] - delta, y_fit[i] + delta))
-                pi.append((y_fit[i] - delta*np.sqrt(1 + 1/len(t_fit)), y_fit[i] + delta*np.sqrt(1 + 1/len(t_fit))))
-
+                
             threshold = manual_thresh
             t_thresh = inverse_5pl(threshold, a, d, c, b, g)
 
@@ -112,21 +111,18 @@ if st.button("Run Analysis"):
             st.write(f"- R²: {r2:.4f}")
             st.write(f"- Threshold: {threshold:.2f} ➜ Time ≈ {t_thresh:.2f} h")
 
-            fig, ax = plt.subplots(figsize=(8, 8))
+            fig, ax = plt.subplots(figsize=(8, 4))
             ax.plot(t_fit, y, 'ko', label="Raw Data")
             ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
             ci_low, ci_high = zip(*ci)
-            pi_low, pi_high = zip(*pi)
-            ax.plot(t_fit, ci_low, 'b--', linewidth=1, label="95% CI")
-            ax.plot(t_fit, ci_high, 'b--', linewidth=1)
-            ax.plot(t_fit, pi_low, 'r:', linewidth=1, label="95% PI")
-            ax.plot(t_fit, pi_high, 'r:', linewidth=1)
-            ax.axhline(threshold, color='red', linestyle='--', linewidth=1, label="Threshold")
+            ax.plot(t_fit, ci_low, 'r--', linewidth=1, label="95% CI")
+            ax.plot(t_fit, ci_high, 'r--', linewidth=1)
+                        ax.axhline(threshold, color='green', linestyle='--', linewidth=1, label="Threshold")
             ax.set_title(f"{col} Fit")
             ax.set_xlabel(x_label, fontweight='bold')
             ax.set_ylabel(y_label, fontweight='bold')
             ax.legend()
-            ax.grid(False)
+            ax.grid(True)
             st.pyplot(fig)
 
             # Save for ZIP
@@ -168,7 +164,23 @@ if st.button("Run Analysis"):
             mime="text/csv"
         )
 
-        # Optional: ZIP download button
+                # Merged plot of all fits
+        if st.button("📊 Show Merged Plot"):
+            fig_all, ax_all = plt.subplots(figsize=(10, 6))
+            for i, row in enumerate(all_csv_rows):
+                sample = row[0]
+                a, d, c, b, g = row[1:6]
+                y_merged = logistic_5pl(time, a, d, c, b, g)
+                ax_all.plot(time, y_merged, label=sample)
+            ax_all.axhline(manual_thresh, color='green', linestyle='--', linewidth=1, label="Threshold")
+            ax_all.set_title("Overlay of All Fitted Curves")
+            ax_all.set_xlabel(x_label, fontweight='bold')
+            ax_all.set_ylabel(y_label, fontweight='bold')
+            ax_all.legend()
+            ax_all.grid(True)
+            st.pyplot(fig_all)
+
+
         with ZipFile(zip_buffer, 'w') as zipf:
             for name, image_bytes in all_figs:
                 zipf.writestr(name, image_bytes)
