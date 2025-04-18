@@ -105,22 +105,12 @@ if st.button("Run Analysis"):
                 
             threshold = manual_thresh
             t_thresh = inverse_5pl(threshold, a, d, c, b, g)
-# Calculate standard error for Tt using error propagation
-try:
-    dy_dp = np.array([
-        (inverse_5pl(threshold, *(popt + np.eye(len(popt))[j] * 1e-5)) - t_thresh) / 1e-5
-        for j in range(len(popt))
-    ])
-    t_thresh_var = np.dot(dy_dp, np.dot(pcov, dy_dp))
-    t_thresh_se = np.sqrt(t_thresh_var)
-except:
-    t_thresh_se = np.nan
-    
+
             st.markdown(f"**{col}**")
             st.write(f"- R²: {r2:.4f}")
             st.write(f"- Threshold: {threshold:.2f} ➜ Time ≈ {t_thresh:.2f} h")
 
-            fig, ax = plt.subplots(figsize=(8, 8))
+            fig, ax = plt.subplots(figsize=(8, 4))
             ax.plot(t_fit, y, 'ko', label="Raw Data")
             ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
             ci_low, ci_high = zip(*ci)
@@ -131,7 +121,7 @@ except:
             ax.set_xlabel(x_label, fontweight='bold')
             ax.set_ylabel(y_label, fontweight='bold')
             ax.legend()
-            ax.grid(False)
+            ax.grid(True)
             st.pyplot(fig)
 
             # Save for ZIP
@@ -140,7 +130,16 @@ except:
             buf.seek(0)
             all_figs.append((f"{col}_fit_plot.{fmt}", buf.read()))
 
-            all_csv_rows.append([col, a, d, c, b, g, r2, t_thresh])
+                            try:
+                    dy_dp = np.array([
+                        (inverse_5pl(threshold, *(popt + np.eye(len(popt))[j] * 1e-5)) - t_thresh) / 1e-5
+                        for j in range(len(popt))
+                    ])
+                    t_thresh_var = np.dot(dy_dp, np.dot(pcov, dy_dp))
+                    t_thresh_se = np.sqrt(t_thresh_var)
+                except:
+                    t_thresh_se = np.nan
+            all_csv_rows.append([col, a, d, c, b, g, r2, t_thresh, t_thresh_se])
             all_formulas.append([col,
                 f"= {d:.6f} + ({a:.6f} - {d:.6f}) / (1 + (t / {c:.6f})^{b:.6f})^{g:.6f}",
                 f"= {c:.6f} * ((({a:.6f} - {d:.6f}) / (y - {d:.6f}))^(1/{g:.6f}) - 1)^(1/{b:.6f})"])
@@ -181,10 +180,39 @@ except:
 
     for name, image_bytes in all_figs:
         st.download_button(
+            label=f"📥 Download {name}",
+            data=image_bytes,
+            file_name=name,
+            mime=f"image/{{'svg+xml' if fmt=='svg' else fmt}}"
+        )
+
+    df_csv = pd.DataFrame(all_csv_rows, columns=["Sample", "a", "d", "c", "b", "g", "R2", "Threshold Time", "Tt StdErr"])
+    df_formulas = pd.DataFrame(all_formulas, columns=["Sample", "Excel 5PL", "Inverse 5PL"])
+    df_summary = pd.merge(df_csv, df_formulas, on="Sample")
+    param_buffer = BytesIO()
+    df_summary.to_csv(param_buffer, index=False)
+    param_buffer.seek(0)
+    st.download_button(
+        label="📥 Download Fitting Parameters + Formulas (CSV)",
+        data=param_buffer,
+        file_name="fitting_parameters_summary.csv",
+        mime="text/csv"
+    )
                 label=f"📥 Download {name}",
                 data=image_bytes,
                 file_name=name,
                 mime=f"image/{'svg+xml' if fmt=='svg' else fmt}"
             )
 
-        df_csv = pd.DataFrame(all_csv_rows, columns=["Sample", "a", "d", "c", "b", "g", "R2", "Threshold Time"])
+            df_csv = pd.DataFrame(all_csv_rows, columns=["Sample", "a", "d", "c", "b", "g", "R2", "Threshold Time", "Tt StdErr"])
+        df_formulas = pd.DataFrame(all_formulas, columns=["Sample", "Excel 5PL", "Inverse 5PL"])
+        df_summary = pd.merge(df_csv, df_formulas, on="Sample")
+        param_buffer = BytesIO()
+        df_summary.to_csv(param_buffer, index=False)
+        param_buffer.seek(0)
+        st.download_button(
+            label="📥 Download Fitting Parameters + Formulas (CSV)",
+            data=param_buffer,
+            file_name="fitting_parameters_summary.csv",
+            mime="text/csv"
+        )
