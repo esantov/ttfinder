@@ -14,9 +14,6 @@ import os
 from zipfile import ZipFile
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
-    except Exception as e:
-        pass
-
 # ----- PUBLIC ACCESS -----
 if "rerun" in st.session_state and st.session_state.rerun:
     st.session_state.rerun = False
