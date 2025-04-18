@@ -77,6 +77,7 @@ all_formulas = []
 zip_buffer = BytesIO()
 
 if st.button("Run Analysis"):
+    show_table_rows = []
     st.subheader("📊 Results")
     time = data.iloc[:, 0].dropna().values
 
@@ -111,7 +112,7 @@ if st.button("Run Analysis"):
             st.write(f"- R²: {r2:.4f}")
             st.write(f"- Threshold: {threshold:.2f} ➜ Time ≈ {t_thresh:.2f} h")
 
-            fig, ax = plt.subplots(figsize=(8, 8))
+            fig, ax = plt.subplots(figsize=(8, 4))
             ax.plot(t_fit, y, 'ko', label="Raw Data")
             ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
             ci_low, ci_high = zip(*ci)
@@ -122,7 +123,7 @@ if st.button("Run Analysis"):
             ax.set_xlabel(x_label, fontweight='bold')
             ax.set_ylabel(y_label, fontweight='bold')
             ax.legend()
-            ax.grid(False)
+            # ax.grid(False)  # Removed grid entirely
             st.pyplot(fig)
 
             # Save for ZIP
@@ -161,6 +162,7 @@ if st.button("Run Analysis"):
             "Excel 5PL": all_formulas[-1][1],
             "Excel Inverse": all_formulas[-1][2]
         })
+
     if all_figs:
         # Prepare combined DataFrame of fits with CI and raw data
         combined_data = []
@@ -202,11 +204,17 @@ if st.button("Run Analysis"):
     param_buffer = BytesIO()
     df_summary.to_csv(param_buffer, index=False)
     param_buffer.seek(0)
+
     zip_params = BytesIO()
     df_summary.to_csv(zip_params, index=False)
     zip_params.seek(0)
     zipf.writestr("fitting_parameters_summary.csv", zip_params.getvalue())
     zipf.close()
+
+    # Show final summary table in app
+    df_table = pd.DataFrame(show_table_rows)
+    st.subheader("📋 Summary Table")
+    st.dataframe(df_table)
 
 st.download_button(
     label="📦 Download All Results (ZIP File)",
