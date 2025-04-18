@@ -92,14 +92,18 @@ if st.button("Run Analysis"):
                 # Calculate threshold time (Tt) based on manual threshold
                 Tt = calculate_threshold_time(manual_thresh, popt_logistic, pcov, t_fit)
 
+                # Calculate confidence intervals (CI)
+                # Calculate standard errors for each parameter
+                param_errors = np.sqrt(np.diag(pcov))
+                ci_low = logistic_5pl(t_fit, *(popt_logistic - param_errors))
+                ci_high = logistic_5pl(t_fit, *(popt_logistic + param_errors))
+
                 # Plot Results
                 fig, ax = plt.subplots(figsize=(10, 10))
                 ax.plot(t_fit, y, 'ko', label="Raw Data")
                 ax.plot(t_fit, y_fit_logistic, 'b-', label="5PL Fit")
 
-                # Add confidence intervals (CI) as red continuous lines
-                ci_low = logistic_5pl(t_fit, *(popt_logistic - np.sqrt(np.diag(pcov))))
-                ci_high = logistic_5pl(t_fit, *(popt_logistic + np.sqrt(np.diag(pcov))))
+                # Plot confidence intervals (95% CI)
                 ax.plot(t_fit, ci_low, 'r-', linewidth=1, label="95% CI (Low)")
                 ax.plot(t_fit, ci_high, 'r-', linewidth=1, label="95% CI (High)")
 
