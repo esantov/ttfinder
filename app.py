@@ -9,6 +9,10 @@ from io import BytesIO
 def logistic_5pl(t, a, d, c, b, g):
     return d + (a - d) / (1 + (t / c)**b)**g
 
+# ----- Inverse 5PL function -----
+def inverse_logistic_5pl(y, a, d, c, b, g):
+    return c * (((a - d) / (y - d)) ** (1 / g) - 1) ** (1 / b)
+
 # ----- Function to calculate the threshold time (Tt) -----
 def calculate_threshold_time(threshold, popt):
     a, d, c, b, g = popt
@@ -49,11 +53,15 @@ manual_thresh = st.number_input("Enter manual threshold:", min_value=0.0, value=
 fmt = st.selectbox("Select image format for download", options=["png", "jpeg", "svg", "pdf"], index=0)
 dpi = st.slider("Image resolution (DPI)", min_value=100, max_value=600, value=300, step=50)
 
+# Storage for results
+fitting_results = []
+all_figs = []
+
 # 5PL Fitting Process
 if st.button("Run Analysis"):
     st.subheader("📊 Results")
     time = data.iloc[:, 0].dropna().values
-    
+
     if len(time) == 0:
         st.error("❌ No valid time values found in the first column.")
     else:
@@ -71,22 +79,40 @@ if st.button("Run Analysis"):
                 y_fit = logistic_5pl(t_fit, *popt)
                 r2 = np.corrcoef(y, y_fit)[0, 1]**2
 
+                # Confidence intervals
+                param_errors = np.sqrt(np.diag(pcov))
+                ci_low = logistic_5pl(t_fit, *(popt - param_errors))
+                ci_high = logistic_5pl(t_fit, *(popt + param_errors))
+
+                # Threshold time
                 try:
                     Tt = calculate_threshold_time(manual_thresh, popt)
                 except ValueError as ve:
                     st.error(f"❌ {ve}")
                     Tt = np.nan
 
+                # Save results
+                fitting_results.append({
+                    "Sample": col,
+                    "Parameters": popt,
+                    "R²": r2,
+                    "Threshold Time (Tt)": Tt
+                })
+
+                # Plot
                 fig, ax = plt.subplots(figsize=(10, 10))
                 ax.plot(t_fit, y, 'ko', label="Raw Data")
                 ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
+                ax.fill_between(t_fit, ci_low, ci_high, color='gray', alpha=0.2, label="95% CI")
                 ax.axhline(manual_thresh, color='green', linestyle='-', linewidth=2, label="Threshold")
                 ax.set_title(f"{col} Fit")
                 ax.set_xlabel(x_label, fontweight='bold')
                 ax.set_ylabel(y_label, fontweight='bold')
                 ax.legend(title=f"{col} (Tt = {Tt:.2f} h)" if not np.isnan(Tt) else col)
+                all_figs.append((fig, col))
                 st.pyplot(fig)
 
+                # Download individual plot
                 buffer = BytesIO()
                 fig.savefig(buffer, format=fmt, dpi=dpi)
                 buffer.seek(0)
@@ -98,11 +124,35 @@ if st.button("Run Analysis"):
                     mime=f"image/{fmt}"
                 )
 
-                st.write(f"Fitting Results for {col}:")
-                st.write(f"- R²: {r2:.4f}")
-                st.write(f"- Parameters: {popt}")
-                if not np.isnan(Tt):
-                    st.write(f"- Threshold Time (Tt): {Tt:.2f} hours")
-
             except Exception as e:
                 st.error(f"❌ Could not fit {col}: {e}")
+
+        # Display parameters table
+        st.write("### Parameters Table")
+        params_table = pd.DataFrame(
+            [{"Sample": res["Sample"], "R²": res["R²"], "Threshold Time (Tt)": res["Threshold Time (Tt)"], **dict(zip(["a", "d", "c", "b", "g"], res["Parameters"]))} for res in fitting_results]
+        )
+        st.dataframe(params_table)
+
+        # Export fitting data
+        st.download_button(
+            label="📥 Export Fitting Data",
+            data=params_table.to_csv(index=False),
+            file_name="fitting_results.csv",
+            mime="text/csv"
+        )
+
+# Merged Plot
+if st.button("Generate Merged Plot"):
+    if not all_figs:
+        st.error("❌ No plots available. Run the analysis first.")
+    else:
+        fig, ax = plt.subplots(figsize=(12, 10))
+        for fig_data, col in all_figs:
+            ax = fig_data.axes[0]
+            ax.plot(ax.lines[0].get_xdata(), ax.lines[0].get_ydata(), label=col)  # Add each curve
+        ax.legend()
+        ax.set_title("Merged Fit Plot")
+        ax.set_xlabel(x_label, fontweight="bold")
+        ax.set_ylabel(y_label, fontweight="bold")
+        st.pyplot(fig)
