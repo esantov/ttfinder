@@ -4,10 +4,27 @@ import numpy as np
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 from io import BytesIO
+from scipy.stats import t
 
 # ----- Simple 5PL logistic function for fitting -----
 def logistic_5pl(t, a, d, c, b, g):
     return d + (a - d) / (1 + (t / c)**b)**g
+
+# ----- Function to calculate the threshold time (Tt) -----
+def calculate_threshold_time(threshold, popt, param_cov, t_values):
+    # Compute the inverse of the 5PL function to find Tt
+    a, d, c, b, g = popt
+    # Calculate the standard errors of the parameters
+    param_errors = np.sqrt(np.diag(param_cov))
+    
+    # Compute the threshold time (Tt) where y crosses the threshold
+    y_at_thresh = threshold
+    try:
+        Tt = c * (((a - d) / (y_at_thresh - d)) ** (1 / g) - 1) ** (1 / b)
+    except Exception as e:
+        Tt = np.nan  # In case of any issues with the calculation
+        st.error(f"❌ Error calculating threshold time for parameters: {e}")
+    return Tt
 
 # ----- APP LOGIC -----
 x_label = st.text_input("X-axis label", value="Time (h)")
@@ -37,8 +54,7 @@ if uploaded_file is not None:
 else:
     data = st.data_editor(example_data, use_container_width=True, num_rows="dynamic")
 
-auto_thresh = st.checkbox("Auto threshold (50% of max)", value=True)
-manual_thresh = st.number_input("Or enter manual threshold:", min_value=0.0, value=3.0, step=0.1)
+manual_thresh = st.number_input("Enter manual threshold:", min_value=0.0, value=3.0, step=0.1)
 
 fmt = st.selectbox("Select image format for download", options=["png", "jpeg", "svg", "pdf"], index=0)
 dpi = st.slider("Image resolution (DPI)", min_value=100, max_value=600, value=300, step=50)
@@ -49,8 +65,6 @@ if st.button("Run Analysis"):
     
     # Extract time data and ensure proper alignment
     time = data.iloc[:, 0].dropna().values
-    
-    # Check if there are missing time values
     if len(time) == 0:
         st.error("❌ No valid time values found in the first column.")
     
@@ -58,7 +72,7 @@ if st.button("Run Analysis"):
         y = data[col].dropna().values
         t_fit = time[:len(y)]  # Ensure time and y values match in length
 
-        # Check if time and y match in length
+        # Validate if time and y match in length
         if len(t_fit) != len(y):
             st.error(f"❌ Sample '{col}' has mismatched time and data lengths.")
             continue
@@ -68,27 +82,34 @@ if st.button("Run Analysis"):
             st.error(f"❌ Sample '{col}' contains NaN values in time or data.")
             continue
 
-        # Debugging: Log the data being used for the fit
-        st.write(f"Attempting to fit Sample '{col}' with:")
-        st.write(f"Time: {t_fit}")
-        st.write(f"Y values: {y}")
-
         try:
-            # Logistic Fit
+            # Ensure data is valid before fitting
             if len(t_fit) > 1:  # Ensure we have enough data points to fit
-                popt_logistic, _ = curve_fit(logistic_5pl, t_fit, y, p0=[min(y), max(y), np.median(t_fit), 1, 1], maxfev=10000)
+                popt_logistic, pcov = curve_fit(logistic_5pl, t_fit, y, p0=[min(y), max(y), np.median(t_fit), 1, 1], maxfev=10000)
                 y_fit_logistic = logistic_5pl(t_fit, *popt_logistic)
                 r2_logistic = np.corrcoef(y, y_fit_logistic)[0, 1]**2  # Compute R^2 manually
+
+                # Calculate threshold time (Tt) based on manual threshold
+                Tt = calculate_threshold_time(manual_thresh, popt_logistic, pcov, t_fit)
 
                 # Plot Results
                 fig, ax = plt.subplots(figsize=(10, 10))
                 ax.plot(t_fit, y, 'ko', label="Raw Data")
                 ax.plot(t_fit, y_fit_logistic, 'b-', label="5PL Fit")
-                ax.axhline(auto_thresh and (max(y_fit_logistic) * 0.5) or manual_thresh, color='green', linestyle='-', linewidth=2, label="Threshold")
+
+                # Add confidence intervals (CI) as red continuous lines
+                ci_low = logistic_5pl(t_fit, *(popt_logistic - np.sqrt(np.diag(pcov))))
+                ci_high = logistic_5pl(t_fit, *(popt_logistic + np.sqrt(np.diag(pcov))))
+                ax.plot(t_fit, ci_low, 'r-', linewidth=1, label="95% CI (Low)")
+                ax.plot(t_fit, ci_high, 'r-', linewidth=1, label="95% CI (High)")
+
+                ax.axhline(manual_thresh, color='green', linestyle='-', linewidth=2, label="Threshold")
                 ax.set_title(f"{col} Fit")
                 ax.set_xlabel(x_label, fontweight='bold')
                 ax.set_ylabel(y_label, fontweight='bold')
-                ax.legend()
+
+                # Show Tt (threshold time) in the legend
+                ax.legend(title=f"{col} (Tt = {Tt:.2f} h)")
                 ax.grid(False)
                 st.pyplot(fig)
 
@@ -104,6 +125,8 @@ if st.button("Run Analysis"):
                 st.write(f"Fitting Results for {col}:")
                 st.write(f"- R²: {r2_logistic:.4f}")
                 st.write(f"- Parameters: {popt_logistic}")
+                st.write(f"- Threshold Time (Tt): {Tt:.2f} hours")
+
             else:
                 st.warning(f"❌ Sample '{col}' has insufficient data for fitting (at least two data points required).")
 
