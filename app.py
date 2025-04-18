@@ -117,7 +117,7 @@ if st.button("Run Analysis"):
             ci_low, ci_high = zip(*ci)
             ax.plot(t_fit, ci_low, 'r--', linewidth=1, label="95% CI")
             ax.plot(t_fit, ci_high, 'r--', linewidth=1)
-                                    ax.axhline(threshold, color='green', linestyle='--', linewidth=1, label="Threshold")
+            ax.axhline(threshold, color='green', linestyle='--', linewidth=1, label="Threshold")
             ax.set_title(f"{col} Fit")
             ax.set_xlabel(x_label, fontweight='bold')
             ax.set_ylabel(y_label, fontweight='bold')
