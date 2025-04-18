@@ -111,18 +111,18 @@ if st.button("Run Analysis"):
             st.write(f"- R²: {r2:.4f}")
             st.write(f"- Threshold: {threshold:.2f} ➜ Time ≈ {t_thresh:.2f} h")
 
-            fig, ax = plt.subplots(figsize=(8, 4))
+            fig, ax = plt.subplots(figsize=(8, 8))
             ax.plot(t_fit, y, 'ko', label="Raw Data")
             ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
             ci_low, ci_high = zip(*ci)
             ax.plot(t_fit, ci_low, 'r--', linewidth=1, label="95% CI")
             ax.plot(t_fit, ci_high, 'r--', linewidth=1)
-            ax.axhline(threshold, color='green', linestyle='--', linewidth=1, label="Threshold")
+                                    ax.axhline(threshold, color='green', linestyle='--', linewidth=1, label="Threshold")
             ax.set_title(f"{col} Fit")
             ax.set_xlabel(x_label, fontweight='bold')
             ax.set_ylabel(y_label, fontweight='bold')
             ax.legend()
-            ax.grid(True)
+            ax.grid(False)
             st.pyplot(fig)
 
             # Save for ZIP
@@ -140,6 +140,36 @@ if st.button("Run Analysis"):
             st.error(f"❌ Could not fit {col}: {e}")
 
     if all_figs:
+        # Automatically generate merged plot
+        fig_all, ax_all = plt.subplots(figsize=(10, 6))
+        for row in all_csv_rows:
+            sample, a, d, c, b, g, r2, t_thresh = row
+            y_merged = logistic_5pl(time, a, d, c, b, g)
+            ax_all.plot(time, y_merged, label=sample)
+        ax_all.axhline(manual_thresh, color='green', linestyle='--', linewidth=1, label="Threshold")
+        ax_all.set_title("Overlay of All Fitted Curves")
+        ax_all.set_xlabel(x_label, fontweight='bold')
+        ax_all.set_ylabel(y_label, fontweight='bold')
+        ax_all.legend()
+        ax_all.grid(False)
+                # Add threshold labels to merged plot
+        for row in all_csv_rows:
+            sample, a, d, c, b, g, r2, t_thresh = row
+            y_value = logistic_5pl(t_thresh, a, d, c, b, g)
+            ax_all.annotate(f"{sample}: {t_thresh:.2f} h",
+                            xy=(t_thresh, y_value),
+                            xytext=(t_thresh, y_value + 2),
+                            arrowprops=dict(arrowstyle="->", lw=1),
+                            fontsize=8)
+
+        st.pyplot(fig_all)
+
+        # Save merged plot to ZIP
+        merged_buf = BytesIO()
+        fig_all.savefig(merged_buf, format=fmt, dpi=dpi, bbox_inches='tight')
+        merged_buf.seek(0)
+        all_figs.append((f"merged_plot.{fmt}", merged_buf.read()))
+
         for name, image_bytes in all_figs:
             st.download_button(
                 label=f"📥 Download {name}",
@@ -163,23 +193,6 @@ if st.button("Run Analysis"):
             file_name="excel_formulas.csv",
             mime="text/csv"
         )
-
-                # Merged plot of all fits
-        if st.button("📊 Show Merged Plot"):
-            fig_all, ax_all = plt.subplots(figsize=(10, 6))
-            for i, row in enumerate(all_csv_rows):
-                sample = row[0]
-                a, d, c, b, g = row[1:6]
-                y_merged = logistic_5pl(time, a, d, c, b, g)
-                ax_all.plot(time, y_merged, label=sample)
-            ax_all.axhline(manual_thresh, color='green', linestyle='--', linewidth=1, label="Threshold")
-            ax_all.set_title("Overlay of All Fitted Curves")
-            ax_all.set_xlabel(x_label, fontweight='bold')
-            ax_all.set_ylabel(y_label, fontweight='bold')
-            ax_all.legend()
-            ax_all.grid(True)
-            st.pyplot(fig_all)
-
 
         with ZipFile(zip_buffer, 'w') as zipf:
             for name, image_bytes in all_figs:
