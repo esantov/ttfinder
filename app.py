@@ -79,10 +79,12 @@ if st.button("Run Analysis"):
                 y_fit = logistic_5pl(t_fit, *popt)
                 r2 = np.corrcoef(y, y_fit)[0, 1]**2
 
-                # Confidence intervals
-                param_errors = np.sqrt(np.diag(pcov))
-                ci_low = logistic_5pl(t_fit, *(popt - param_errors))
-                ci_high = logistic_5pl(t_fit, *(popt + param_errors))
+                # Confidence intervals using Monte Carlo simulation
+                n_simulations = 1000
+                param_samples = np.random.multivariate_normal(popt, pcov, size=n_simulations)
+                y_simulations = np.array([logistic_5pl(t_fit, *params) for params in param_samples])
+                ci_low = np.percentile(y_simulations, 2.5, axis=0)
+                ci_high = np.percentile(y_simulations, 97.5, axis=0)
 
                 # Threshold time
                 try:
@@ -103,7 +105,7 @@ if st.button("Run Analysis"):
                 fig, ax = plt.subplots(figsize=(10, 10))
                 ax.plot(t_fit, y, 'ko', label="Raw Data")
                 ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
-                ax.fill_between(t_fit, ci_low, ci_high, color='blue', alpha=0.3, label="95% CI")
+                ax.fill_between(t_fit, ci_low, ci_high, color='blue', alpha=0.2, label="95% CI")
                 ax.axhline(manual_thresh, color='green', linestyle='-', linewidth=2, label="Threshold")
                 ax.set_title(f"{col} Fit")
                 ax.set_xlabel(x_label, fontweight='bold')
