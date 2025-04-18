@@ -26,6 +26,10 @@ def send_notification(username):
         print("Email notification failed:", e)
 
 # ----- PUBLIC ACCESS -----
+if st.session_state.get("rerun", False):
+    st.session_state.rerun = False
+    st.experimental_rerun()
+
 if "login_log" not in st.session_state:
     st.session_state.login_log = []
 
@@ -35,7 +39,7 @@ if st.button("Enter App"):
         st.session_state.username = username
         st.session_state.login_log.append((username, str(datetime.datetime.now())))
         send_notification(username)
-        st.experimental_rerun()
+        st.session_state.rerun = True
     else:
         st.error("❌ Please enter your name")
 
@@ -56,3 +60,4 @@ with st.sidebar:
 
 # ----- APP LOGIC -----
 # (App logic remains unchanged from this point on)
+
