@@ -185,14 +185,14 @@ if st.button("Run Analysis"):
     df_csv = pd.DataFrame(all_csv_rows, columns=["Sample", "a", "d", "c", "b", "g", "R2", "Threshold Time", "Tt StdErr"])
     df_formulas = pd.DataFrame(all_formulas, columns=["Sample", "Excel 5PL", "Inverse 5PL"])
     df_summary = pd.merge(df_csv, df_formulas, on="Sample")
-        param_buffer = BytesIO()
-        df_summary.to_csv(param_buffer, index=False)
-        param_buffer.seek(0)
-        zip_params = BytesIO()
-        df_summary.to_csv(zip_params, index=False)
-        zip_params.seek(0)
-        zipf.writestr("fitting_parameters_summary.csv", zip_params.getvalue())
-        zipf.close()
+    param_buffer = BytesIO()
+    df_summary.to_csv(param_buffer, index=False)
+    param_buffer.seek(0)
+    zip_params = BytesIO()
+    df_summary.to_csv(zip_params, index=False)
+    zip_params.seek(0)
+    zipf.writestr("fitting_parameters_summary.csv", zip_params.getvalue())
+    zipf.close()
 
 st.download_button(
     label="📦 Download All Results (ZIP File)",
