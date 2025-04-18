@@ -206,10 +206,6 @@ if st.button("Run Analysis"):
 
         zip_buffer.seek(0)
         st.download_button(
-            ,
-            file_name="excel_formulas.csv",
-            mime="text/csv"
-        )
             label="📦 Download All Results (ZIP)",
             data=zip_buffer,
             file_name="5pl_fitting_outputs.zip",
