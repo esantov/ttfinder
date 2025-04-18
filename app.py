@@ -73,60 +73,59 @@ if st.button("Run Analysis"):
                 st.error(f"❌ Sample '{col}' has mismatched time and data lengths.")
                 continue
 
-           try:
-    # Initial guess and curve fitting
-    initial_guess = [np.max(y), np.min(y), np.median(t_fit), 1, 1]
-    popt, pcov = curve_fit(logistic_5pl, t_fit, y, p0=initial_guess, maxfev=10000)
-    y_fit = logistic_5pl(t_fit, *popt)
-    r2 = np.corrcoef(y, y_fit)[0, 1]**2
+            try:
+                initial_guess = [np.max(y), np.min(y), np.median(t_fit), 1, 1]
+                popt, pcov = curve_fit(logistic_5pl, t_fit, y, p0=initial_guess, maxfev=10000)
+                y_fit = logistic_5pl(t_fit, *popt)
+                r2 = np.corrcoef(y, y_fit)[0, 1]**2
 
-    # Confidence intervals
-    param_errors = np.sqrt(np.diag(pcov))
-    ci_low = logistic_5pl(t_fit, *(popt - param_errors))
-    ci_high = logistic_5pl(t_fit, *(popt + param_errors))
+                # Confidence intervals
+                param_errors = np.sqrt(np.diag(pcov))
+                ci_low = logistic_5pl(t_fit, *(popt - param_errors))
+                ci_high = logistic_5pl(t_fit, *(popt + param_errors))
 
-    # Threshold time
-    try:
-        Tt = calculate_threshold_time(manual_thresh, popt)
-    except ValueError as ve:
-        st.error(f"❌ {ve}")
-        Tt = np.nan
+                # Threshold time
+                try:
+                    Tt = calculate_threshold_time(manual_thresh, popt)
+                except ValueError as ve:
+                    st.error(f"❌ {ve}")
+                    Tt = np.nan
 
-    # Save results
-    fitting_results.append({
-        "Sample": col,
-        "Parameters": popt,
-        "R²": r2,
-        "Threshold Time (Tt)": Tt
-    })
+                # Save results
+                fitting_results.append({
+                    "Sample": col,
+                    "Parameters": popt,
+                    "R²": r2,
+                    "Threshold Time (Tt)": Tt
+                })
 
-    # Plot
-    fig, ax = plt.subplots(figsize=(10, 10))
-    ax.plot(t_fit, y, 'ko', label="Raw Data")
-    ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
-    ax.fill_between(t_fit, ci_low, ci_high, color='blue', alpha=0.3, label="95% CI")
-    ax.axhline(manual_thresh, color='green', linestyle='-', linewidth=2, label="Threshold")
-    ax.set_title(f"{col} Fit")
-    ax.set_xlabel(x_label, fontweight='bold')
-    ax.set_ylabel(y_label, fontweight='bold')
-    ax.legend(title=f"{col} (Tt = {Tt:.2f} h)" if not np.isnan(Tt) else col)
-    all_figs.append((fig, col))
-    st.pyplot(fig)
+                # Plot
+                fig, ax = plt.subplots(figsize=(10, 10))
+                ax.plot(t_fit, y, 'ko', label="Raw Data")
+                ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
+                ax.fill_between(t_fit, ci_low, ci_high, color='blue', alpha=0.3, label="95% CI")
+                ax.axhline(manual_thresh, color='green', linestyle='-', linewidth=2, label="Threshold")
+                ax.set_title(f"{col} Fit")
+                ax.set_xlabel(x_label, fontweight='bold')
+                ax.set_ylabel(y_label, fontweight='bold')
+                ax.legend(title=f"{col} (Tt = {Tt:.2f} h)" if not np.isnan(Tt) else col)
+                all_figs.append((fig, col))
+                st.pyplot(fig)
 
-    # Download individual plot
-    buffer = BytesIO()
-    fig.savefig(buffer, format=fmt, dpi=dpi)
-    buffer.seek(0)
+                # Download individual plot
+                buffer = BytesIO()
+                fig.savefig(buffer, format=fmt, dpi=dpi)
+                buffer.seek(0)
 
-    st.download_button(
-        label=f"📥 Download Fit Plot for {col}",
-        data=buffer.getvalue(),
-        file_name=f"{col}_fit_plot.{fmt}",
-        mime=f"image/{fmt}"
-    )
+                st.download_button(
+                    label=f"📥 Download Fit Plot for {col}",
+                    data=buffer.getvalue(),
+                    file_name=f"{col}_fit_plot.{fmt}",
+                    mime=f"image/{fmt}"
+                )
 
-except Exception as e:
-    st.error(f"❌ Could not fit {col}: {e}")
+            except Exception as e:
+                st.error(f"❌ Could not fit {col}: {e}")
 
         # Display parameters table
         st.write("### Parameters Table")
