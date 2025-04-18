@@ -127,7 +127,7 @@ if st.button("Run Analysis"):
             # Save for ZIP
             buf = BytesIO()
             fig.savefig(buf, format=fmt, dpi=dpi, bbox_inches='tight')
-                        buf.seek(0)
+            buf.seek(0)
             all_figs.append((f"{col}_fit_plot.{fmt}", buf.read()))
 
         try:
