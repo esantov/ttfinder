@@ -133,7 +133,7 @@ if st.button("Run Analysis"):
             ax.set_xlabel(x_label)
             ax.set_ylabel(y_label)
             ax.legend()
-            ax.grid(True)
+            ax.grid(False)
             st.pyplot(fig)
 
         except Exception as e:
