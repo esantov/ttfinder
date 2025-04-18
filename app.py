@@ -168,6 +168,9 @@ if st.button("Run Analysis"):
         st.download_button(
             label="📄 Download Excel Formulas (CSV)",
             data=df_formulas.to_csv(index=False),
+            file_name="excel_formulas.csv",
+            mime="text/csv"
+        )
 
         # Optional: ZIP download button
         with ZipFile(zip_buffer, 'w') as zipf:
