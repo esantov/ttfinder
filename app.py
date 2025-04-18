@@ -43,7 +43,11 @@ def send_notification(username):
             data=zip_buffer,
             file_name="5pl_fitting_outputs.zip",
             mime="application/zip"
-        )        print("Email notification failed:", e)
+        )",
+            data=zip_buffer,
+            file_name="5pl_fitting_outputs.zip",
+            mime="application/zip"
+        )        # print("Email notification failed:", e)
 
 # ----- PUBLIC ACCESS -----
 if "rerun" in st.session_state and st.session_state.rerun:
