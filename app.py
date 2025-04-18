@@ -185,7 +185,7 @@ if st.button("Run Analysis"):
     df_csv = pd.DataFrame(all_csv_rows, columns=["Sample", "a", "d", "c", "b", "g", "R2", "Threshold Time", "Tt StdErr"])
     df_formulas = pd.DataFrame(all_formulas, columns=["Sample", "Excel 5PL", "Inverse 5PL"])
     df_summary = pd.merge(df_csv, df_formulas, on="Sample")
-            param_buffer = BytesIO()
+        param_buffer = BytesIO()
         df_summary.to_csv(param_buffer, index=False)
         param_buffer.seek(0)
         zip_params = BytesIO()
