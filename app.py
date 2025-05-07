@@ -14,14 +14,14 @@ import os
 from zipfile import ZipFile
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from sklearn.metrics import r2_score
-
 import numpy as np
+
 def r2_score(y_true, y_pred):
     y_true = np.asarray(y_true)
     y_pred = np.asarray(y_pred)
-    ss_res = np.sum((y_true - y_pred)**2)
-    ss_tot = np.sum((y_true - np.mean(y_true))**2)
-    return 1 - ss_res/ss_tot
+    ss_res = np.sum((y_true - y_pred) ** 2)
+    ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
+    return 1 - ss_res / ss_tot
 
 # usage:
 # r2 = r2_score(actuals, predictions)
