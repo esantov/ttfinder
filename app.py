@@ -13,10 +13,9 @@ import matplotlib.pyplot as plt
 import os
 from zipfile import ZipFile
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-pip install scikit-learn
 from sklearn.metrics import r2_score
-import numpy as np
 
+import numpy as np
 def r2_score(y_true, y_pred):
     y_true = np.asarray(y_true)
     y_pred = np.asarray(y_pred)
