@@ -15,6 +15,9 @@ if 'ci_5pl' not in st.session_state:
     st.session_state.ci_5pl = {}
 if 'fits_lin' not in st.session_state:
     st.session_state.fits_lin = {}
+# Initialize CI storage for linear fits
+if 'ci_lin' not in st.session_state:
+    st.session_state.ci_lin = {}
 if 'summary_rows' not in st.session_state:
     st.session_state.summary_rows = []
 
