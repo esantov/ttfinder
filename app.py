@@ -97,7 +97,6 @@ if st.button("Run Analysis"):
             ci_low = []
             ci_high = []
             for i, xi in enumerate(t_fit):
-                # gradient
                 grad = np.array([
                     (logistic_5pl(xi, *(popt + np.eye(len(popt))[j]*1e-5)) - y_fit[i]) / 1e-5
                     for j in range(len(popt))
@@ -112,27 +111,49 @@ if st.button("Run Analysis"):
             st.session_state.fits_5pl[col] = (t_fit, y_fit)
             st.session_state.ci_5pl[col] = (ci_low, ci_high)
 
-            # Plot with CI
+            # Plot with CI as red band
             st.markdown(f"**{col} – 5PL Fit** (R² = {r2:.4f})")
-            fig, ax = plt.subplots(figsize=(8,8))
-            ax.plot(t_fit, y_vals, 'ko', label='Data')
+            fig, ax = plt.subplots(figsize=(8, 8))
+            ax.plot(t_fit, y_vals, 'ko', label='Raw Data')
             ax.plot(t_fit, y_fit, 'b-', label='5PL Fit')
             ax.fill_between(t_fit, ci_low, ci_high, color='red', alpha=0.2, label='95% CI')
-            ax.axhline(manual_thresh, color='green', linestyle='--', label='Threshold')
-            ax.set_xlabel(x_label); ax.set_ylabel(y_label); ax.legend()
+            ax.axhline(manual_thresh, color='green', linestyle='--', linewidth=1, label='Threshold')
+            ax.set_title(f"{col} – 5PL Fit")
+            ax.set_xlabel(x_label, fontweight='bold')
+            ax.set_ylabel(y_label, fontweight='bold')
+            ax.legend()
             st.pyplot(fig)
         except Exception as e:
             # On 5PL fit error -> linear fallback
             st.error(f"❌ 5PL failed for {col}, using linear fallback: {e}")
+            # Linear regression
             coef = np.polyfit(t_fit, y_vals, 1)
             y_lin = np.polyval(coef, t_fit)
+            # Compute linear 95% CI
+            n = len(t_fit)
+            x_mean = np.mean(t_fit)
+            Sxx = np.sum((t_fit - x_mean)**2)
+            residuals = y_vals - y_lin
+            sigma2 = np.sum(residuals**2) / (n - 2)
+            tval_lin = t.ppf(0.975, n - 2)
+            ci_lin_low = []
+            ci_lin_high = []
+            for xi, yhat in zip(t_fit, y_lin):
+                se_pred = np.sqrt(sigma2 * (1/n + (xi - x_mean)**2 / Sxx))
+                delta = tval_lin * se_pred
+                ci_lin_low.append(yhat - delta)
+                ci_lin_high.append(yhat + delta)
+            ci_lin_low = np.array(ci_lin_low)
+            ci_lin_high = np.array(ci_lin_high)
             st.session_state.fits_lin[col] = (t_fit, y_lin)
+            st.session_state.ci_lin[col] = (ci_lin_low, ci_lin_high)
 
-            # Plot linear with original styling but no CI
+            # Plot linear fallback with CI bands
             st.markdown(f"**{col} – Linear Fallback Fit**")
             fig, ax = plt.subplots(figsize=(8,6))
             ax.plot(t_fit, y_vals, 'ko', label='Data')
             ax.plot(t_fit, y_lin, 'b-', label='Linear Fallback')
+            ax.fill_between(t_fit, ci_lin_low, ci_lin_high, color='red', alpha=0.2, label='95% CI')
             ax.axhline(manual_thresh, color='green', linestyle='--', label='Threshold')
             ax.set_xlabel(x_label); ax.set_ylabel(y_label); ax.legend()
             st.pyplot(fig)
