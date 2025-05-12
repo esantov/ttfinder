@@ -205,7 +205,6 @@ if st.session_state.fits_5pl or st.session_state.fits_lin:
     ax_all.axhline(manual_thresh, color='green', linestyle='--', linewidth=1, label='Threshold')
     ax_all.set_xlabel(x_label, fontweight='bold')
     ax_all.set_ylabel(y_label, fontweight='bold')
-    ax_all.legend()
     st.pyplot(fig_all)
     # Download combined plot
     buf_all = BytesIO()
