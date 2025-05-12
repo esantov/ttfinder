@@ -180,30 +180,29 @@ if st.button("Run Analysis"):
 if st.session_state.fits_5pl or st.session_state.fits_lin:
     st.markdown("---")
     st.subheader("Combined Fits")
-    # Use original styling: 8x8 size, raw data in black circles,
-    # 5PL fit in blue solid, CI in red dashed, threshold in green dashed
     fig_all, ax_all = plt.subplots(figsize=(8, 8))
+    # raw data points (black circles)
+    first = True
     for col in data.columns[1:]:
-        t_fit, y_vals = None, None
-        # plot raw data
         y_raw = data[col].dropna().values
         t_raw = data.iloc[:,0].dropna().values[:len(y_raw)]
-        ax_all.plot(t_raw, y_raw, 'ko', label=f'{col} Data' if col == data.columns[1] else "")
-        # if 5PL fit exists
-        if col in st.session_state.fits_5pl:
-            tx, y5 = st.session_state.fits_5pl[col]
-            ax_all.plot(tx, y5, 'b-', label=f'{col} 5PL')
-            ci_low, ci_high = st.session_state.ci_5pl.get(col, (None, None))
-            if ci_low is not None:
-                ax_all.plot(tx, ci_low, 'r--', linewidth=1, label=f'{col} 95% CI')
-                ax_all.plot(tx, ci_high, 'r--', linewidth=1)
-            # threshold line only once
-            if col == data.columns[1]:
-                ax_all.axhline(manual_thresh, color='green', linestyle='--', linewidth=1, label='Threshold')
-        # if linear fallback exists
-        if col in st.session_state.fits_lin:
-            tx, ylin = st.session_state.fits_lin[col]
-            ax_all.plot(tx, ylin, 'b--', label=f'{col} Linear')
+        ax_all.plot(t_raw, y_raw, 'ko', label='Raw Data' if first else None)
+        first = False
+    # 5PL fits with shaded CI
+    for col, (tx, y5) in st.session_state.fits_5pl.items():
+        ci_low, ci_high = st.session_state.ci_5pl.get(col, (None, None))
+        ax_all.plot(tx, y5, 'b-', label=f'{col} 5PL')
+        if ci_low is not None and ci_high is not None:
+            ax_all.fill_between(tx, ci_low, ci_high, color='red', alpha=0.2, label='5PL 95% CI')
+    # linear fits with shaded CI
+    for col, (tx_lin, y_lin) in st.session_state.fits_lin.items():
+        ci_lin = st.session_state.ci_lin.get(col, (None, None))
+        ci_lin_low, ci_lin_high = ci_lin
+        ax_all.plot(tx_lin, y_lin, 'b--', label=f'{col} Linear')
+        if ci_lin_low is not None and ci_lin_high is not None:
+            ax_all.fill_between(tx_lin, ci_lin_low, ci_lin_high, color='red', alpha=0.2, label='Linear 95% CI')
+    # threshold line
+    ax_all.axhline(manual_thresh, color='green', linestyle='--', linewidth=1, label='Threshold')
     ax_all.set_xlabel(x_label, fontweight='bold')
     ax_all.set_ylabel(y_label, fontweight='bold')
     ax_all.legend()
