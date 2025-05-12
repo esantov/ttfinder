@@ -6,10 +6,13 @@ from sklearn.metrics import r2_score
 from io import BytesIO
 import datetime
 import matplotlib.pyplot as plt
+from scipy.stats import t
 
 # ----- SESSION STATE INITIALIZATION -----
 if 'fits_5pl' not in st.session_state:
     st.session_state.fits_5pl = {}
+if 'ci_5pl' not in st.session_state:
+    st.session_state.ci_5pl = {}
 if 'fits_lin' not in st.session_state:
     st.session_state.fits_lin = {}
 if 'summary_rows' not in st.session_state:
@@ -50,7 +53,7 @@ manual_thresh = st.number_input("Manual threshold", 0.0, 100.0, 3.0, 0.1)
 fmt = st.selectbox("Image format", ["png","jpeg","svg","pdf"])
 dpi = st.slider("DPI", 100, 600, 300, 50)
 
-# 5PL functions
+# 5PL logistic functions
 def logistic_5pl(t, a, d, c, b, g):
     return d + (a - d) / (1 + (t / c)**b)**g
 
@@ -63,7 +66,9 @@ def inverse_5pl(y, a, d, c, b, g):
 
 # ----- ANALYSIS -----
 if st.button("Run Analysis"):
+    # clear previous
     st.session_state.fits_5pl.clear()
+    st.session_state.ci_5pl.clear()
     st.session_state.fits_lin.clear()
     st.session_state.summary_rows.clear()
     st.subheader("Individual Fits")
@@ -84,34 +89,52 @@ if st.button("Run Analysis"):
             a, d, c, b, g = popt
             y_fit = logistic_5pl(t_fit, *popt)
             r2 = r2_score(y_vals, y_fit)
+
+            # Compute 95% CI
+            dof = max(len(t_fit) - len(popt), 1)
+            alpha = 0.05
+            tval = t.ppf(1.0 - alpha/2., dof)
+            ci_low = []
+            ci_high = []
+            for i, xi in enumerate(t_fit):
+                # gradient
+                grad = np.array([
+                    (logistic_5pl(xi, *(popt + np.eye(len(popt))[j]*1e-5)) - y_fit[i]) / 1e-5
+                    for j in range(len(popt))
+                ])
+                se = np.sqrt(grad.dot(pcov).dot(grad))
+                delta = tval * se
+                ci_low.append(y_fit[i] - delta)
+                ci_high.append(y_fit[i] + delta)
+            ci_low = np.array(ci_low)
+            ci_high = np.array(ci_high)
+
             st.session_state.fits_5pl[col] = (t_fit, y_fit)
+            st.session_state.ci_5pl[col] = (ci_low, ci_high)
+
+            # Plot with CI
             st.markdown(f"**{col} – 5PL Fit** (R² = {r2:.4f})")
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(figsize=(8,6))
             ax.plot(t_fit, y_vals, 'ko', label='Data')
             ax.plot(t_fit, y_fit, 'b-', label='5PL Fit')
+            ax.fill_between(t_fit, ci_low, ci_high, color='blue', alpha=0.2, label='95% CI')
             ax.axhline(manual_thresh, color='green', linestyle='--', label='Threshold')
             ax.set_xlabel(x_label); ax.set_ylabel(y_label); ax.legend()
             st.pyplot(fig)
         except Exception as e:
-            # On 5PL fit error, allow linear fallback preserving original styling
+            # On 5PL fit error -> linear fallback
             st.error(f"❌ 5PL failed for {col}, using linear fallback: {e}")
-
-            # Compute linear fit
             coef = np.polyfit(t_fit, y_vals, 1)
             y_lin = np.polyval(coef, t_fit)
             st.session_state.fits_lin[col] = (t_fit, y_lin)
 
-            # Replot original axes with linear fallback overlaid
-            fig, ax = plt.subplots(figsize=(8, 8))
+            # Plot linear with original styling but no CI
+            st.markdown(f"**{col} – Linear Fallback Fit**")
+            fig, ax = plt.subplots(figsize=(8,6))
             ax.plot(t_fit, y_vals, 'ko', label='Data')
-            # Linear fallback plotted in same style as 5PL (solid blue)
-            ax.plot(t_fit, y_lin, 'b-', label='Linear fallback')
-            # Show threshold line and CI if available
-            ax.axhline(manual_thresh, color='green', linestyle='--', linewidth=1, label='Threshold')
-            ax.set_title(f"{col} – Linear Fallback Fit")
-            ax.set_xlabel(x_label, fontweight='bold')
-            ax.set_ylabel(y_label, fontweight='bold')
-            ax.legend()
+            ax.plot(t_fit, y_lin, 'b-', label='Linear Fallback')
+            ax.axhline(manual_thresh, color='green', linestyle='--', label='Threshold')
+            ax.set_xlabel(x_label); ax.set_ylabel(y_label); ax.legend()
             st.pyplot(fig)
 
         # summary row
@@ -129,28 +152,51 @@ if st.button("Run Analysis"):
     st.subheader("Summary Table")
     st.dataframe(pd.DataFrame(st.session_state.summary_rows))
 
-# ----- COMBINED PLOT -----
+# Combined plot
 if st.session_state.fits_5pl or st.session_state.fits_lin:
     st.markdown("---")
     st.subheader("Combined Fits")
-    fig_all, ax_all = plt.subplots(figsize=(8,5))
-    for col, (tx, y5) in st.session_state.fits_5pl.items():
-        ax_all.plot(tx, y5, '-', label=f"{col} 5PL")
-    for col, (tx, ylin) in st.session_state.fits_lin.items():
-        ax_all.plot(tx, ylin, '--', label=f"{col} Linear")
-    ax_all.set_xlabel(x_label); ax_all.set_ylabel(y_label); ax_all.legend()
+    # Use original styling: 8x8 size, raw data in black circles,
+    # 5PL fit in blue solid, CI in red dashed, threshold in green dashed
+    fig_all, ax_all = plt.subplots(figsize=(8, 8))
+    for col in data.columns[1:]:
+        t_fit, y_vals = None, None
+        # plot raw data
+        y_raw = data[col].dropna().values
+        t_raw = data.iloc[:,0].dropna().values[:len(y_raw)]
+        ax_all.plot(t_raw, y_raw, 'ko', label=f'{col} Data' if col == data.columns[1] else "")
+        # if 5PL fit exists
+        if col in st.session_state.fits_5pl:
+            tx, y5 = st.session_state.fits_5pl[col]
+            ax_all.plot(tx, y5, 'b-', label=f'{col} 5PL')
+            ci_low, ci_high = st.session_state.ci_5pl.get(col, (None, None))
+            if ci_low is not None:
+                ax_all.plot(tx, ci_low, 'r--', linewidth=1, label=f'{col} 95% CI')
+                ax_all.plot(tx, ci_high, 'r--', linewidth=1)
+            # threshold line only once
+            if col == data.columns[1]:
+                ax_all.axhline(manual_thresh, color='green', linestyle='--', linewidth=1, label='Threshold')
+        # if linear fallback exists
+        if col in st.session_state.fits_lin:
+            tx, ylin = st.session_state.fits_lin[col]
+            ax_all.plot(tx, ylin, 'b--', label=f'{col} Linear')
+    ax_all.set_xlabel(x_label, fontweight='bold')
+    ax_all.set_ylabel(y_label, fontweight='bold')
+    ax_all.legend()
     st.pyplot(fig_all)
+    # Download combined plot
+    buf_all = BytesIO()
+    fig_all.savefig(buf_all, format=fmt, dpi=dpi, bbox_inches='tight')
+    buf_all.seek(0)
+    st.download_button(
+        "📥 Download Combined Plot", buf_all.read(),
+        file_name=f"combined_fits.{fmt}", mime=f"image/{{'svg+xml' if fmt=='svg' else fmt}}"
+    )
 
-# ----- GLOBAL DOWNLOAD -----
+# Global download
 st.download_button(
     "Download Summary CSV",
     data=pd.DataFrame(st.session_state.summary_rows).to_csv(index=False).encode(),
     file_name=f"summary_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
     mime="text/csv"
-)
-st.download_button(
-    "Download All Results (ZIP)",
-    data=BytesIO().getvalue(),  # placeholder
-    file_name=f"results_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
-    mime="application/zip"
 )
