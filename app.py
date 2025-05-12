@@ -2,63 +2,53 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from scipy.optimize import curve_fit
-from scipy.interpolate import interp1d
 from sklearn.metrics import r2_score
-from scipy.stats import t
-import smtplib
-from email.mime.text import MIMEText
 from io import BytesIO
 import datetime
 import matplotlib.pyplot as plt
-import os
-from zipfile import ZipFile
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
-# ----- PUBLIC ACCESS -----
-if "rerun" in st.session_state and st.session_state.rerun:
-    st.session_state.rerun = False
-    st.stop()
+# ----- SESSION STATE INITIALIZATION -----
+if 'fits_5pl' not in st.session_state:
+    st.session_state.fits_5pl = {}
+if 'fits_lin' not in st.session_state:
+    st.session_state.fits_lin = {}
+if 'summary_rows' not in st.session_state:
+    st.session_state.summary_rows = []
 
-    st.session_state.login_log = []
-
-
-    st.stop()
-
-
-# ----- APP LOGIC -----
-
+# ----- USER INPUT -----
 x_label = st.text_input("X-axis label", value="Time (h)")
 y_label = st.text_input("Y-axis label", value="Signal")
 
 st.title("📈 5PL Curve Fitting Web App")
-st.markdown("Paste or enter your fluorescence/time data below. First column should be time (in hours), others are samples.")
+st.markdown(
+    "Paste or enter your fluorescence/time data below. First column should be time (in hours), others are samples."
+)
 
-num_samples = st.number_input("How many samples do you want to enter?", min_value=1, max_value=20, value=2, step=1)
+num_samples = st.number_input(
+    "Number of samples?", min_value=1, max_value=20, value=2, step=1
+)
 
-sample_data = {"Time": np.arange(0, 4.25, 0.25)}
-labels = []
+# Example template
+time_template = np.arange(0, 4.25, 0.25)
+example_data = pd.DataFrame({"Time": time_template})
 for i in range(1, num_samples + 1):
-    default_label = f"Sample{i}"
-    label = st.text_input(f"Label for Sample {i}", value=default_label)
-    if label in labels:
-        st.warning(f"⚠️ Duplicate label '{label}' found. Please choose a unique name.")
-    labels.append(label)
-    sample_data[label] = np.linspace(1 + i, 25 - i, 17)
+    example_data[f"Sample{i}"] = np.linspace(1 + i, 25 - i, len(time_template))
 
-example_data = pd.DataFrame(sample_data)
-
-uploaded_file = st.file_uploader("Upload a CSV file (wide format, first column = Time)", type="csv")
-if uploaded_file is not None:
-    data = pd.read_csv(uploaded_file, true_values=['TRUE', 'True', 'true'], false_values=['FALSE', 'False', 'false', 'fALSE'])
+uploaded = st.file_uploader("Upload CSV (first column=Time)", type="csv")
+if uploaded:
+    data = pd.read_csv(
+        uploaded,
+        true_values=['TRUE','True','true'],
+        false_values=['FALSE','False','false','fALSE']
+    )
     data = data.apply(pd.to_numeric, errors='coerce')
     st.success("✅ Data loaded from file")
 else:
-    data = st.data_editor(example_data, use_container_width=True, num_rows="dynamic")
+    data = st.data_editor(example_data, num_rows="dynamic", use_container_width=True)
 
-manual_thresh = st.number_input("Or enter manual threshold:", min_value=0.0, value=3.0, step=0.1)
-
-fmt = st.selectbox("Select image format for download", options=["png", "jpeg", "svg", "pdf"], index=0)
-dpi = st.slider("Image resolution (DPI)", min_value=100, max_value=600, value=300, step=50)
+manual_thresh = st.number_input("Manual threshold", 0.0, 100.0, 3.0, 0.1)
+fmt = st.selectbox("Image format", ["png","jpeg","svg","pdf"])
+dpi = st.slider("DPI", 100, 600, 300, 50)
 
 # 5PL functions
 def logistic_5pl(t, a, d, c, b, g):
@@ -66,159 +56,101 @@ def logistic_5pl(t, a, d, c, b, g):
 
 def inverse_5pl(y, a, d, c, b, g):
     try:
-        base = ((a - d) / (y - d))**(1 / g) - 1
-        return c * base**(1 / b)
+        base = ((a - d)/(y - d))**(1/g) - 1
+        return c * base**(1/b)
     except:
         return np.nan
 
-all_figs = []
-all_csv_rows = []
-all_formulas = []
-zip_buffer = BytesIO()
-
+# ----- ANALYSIS -----
 if st.button("Run Analysis"):
-    show_table_rows = []
-    st.subheader("📊 Results")
-    time = data.iloc[:, 0].dropna().values
+    st.session_state.fits_5pl.clear()
+    st.session_state.fits_lin.clear()
+    st.session_state.summary_rows.clear()
+    st.subheader("Individual Fits")
+    time_vals = data.iloc[:,0].dropna().values
 
     for col in data.columns[1:]:
-        y = data[col].dropna().values
-        t_fit = time[:len(y)]
+        y_vals = data[col].dropna().values
+        t_fit = time_vals[:len(y_vals)]
+        a = d = c = b = g = r2 = None
+
+        # Try 5PL fit
         try:
-            popt, pcov = curve_fit(logistic_5pl, t_fit, y, p0=[min(y), max(y), np.median(t_fit), 1, 1], maxfev=10000)
-            y_fit = logistic_5pl(t_fit, *popt)
-            r2 = r2_score(y, y_fit)
+            popt, pcov = curve_fit(
+                logistic_5pl, t_fit, y_vals,
+                p0=[min(y_vals), max(y_vals), np.median(t_fit), 1, 1],
+                maxfev=10000
+            )
             a, d, c, b, g = popt
+            y_fit = logistic_5pl(t_fit, *popt)
+            r2 = r2_score(y_vals, y_fit)
+            st.session_state.fits_5pl[col] = (t_fit, y_fit)
+            st.markdown(f"**{col} – 5PL Fit** (R² = {r2:.4f})")
+            fig, ax = plt.subplots()
+            ax.plot(t_fit, y_vals, 'ko', label='Data')
+            ax.plot(t_fit, y_fit, 'b-', label='5PL Fit')
+            ax.axhline(manual_thresh, color='green', linestyle='--', label='Threshold')
+            ax.set_xlabel(x_label); ax.set_ylabel(y_label); ax.legend()
+            st.pyplot(fig)
+        except Exception as e:
+            # On 5PL fit error, allow linear fallback preserving original styling
+            st.error(f"❌ 5PL failed for {col}, using linear fallback: {e}")
 
-            dof = max(0, len(t_fit) - len(popt))
-            alpha = 0.05
-            tval = t.ppf(1.0 - alpha / 2., dof)
-            mse = np.sum((y - y_fit)**2) / dof
+            # Compute linear fit
+            coef = np.polyfit(t_fit, y_vals, 1)
+            y_lin = np.polyval(coef, t_fit)
+            st.session_state.fits_lin[col] = (t_fit, y_lin)
 
-            ci = []
-            for i in range(len(t_fit)):
-                dy_dx = np.array([
-                    (logistic_5pl(t_fit[i], *(popt + np.eye(len(popt))[j]*1e-5)) - y_fit[i]) / 1e-5
-                    for j in range(len(popt))
-                ])
-                se = np.sqrt(np.dot(dy_dx, np.dot(pcov, dy_dx)))
-                delta = tval * se
-                ci.append((y_fit[i] - delta, y_fit[i] + delta))
-                
-            threshold = manual_thresh
-            t_thresh = inverse_5pl(threshold, a, d, c, b, g)
-
-            st.markdown(f"**{col}**")
-            st.write(f"- R²: {r2:.4f}")
-            st.write(f"- Threshold: {threshold:.2f} ➜ Time ≈ {t_thresh:.2f} h")
-
+            # Replot original axes with linear fallback overlaid
             fig, ax = plt.subplots(figsize=(8, 8))
-            ax.plot(t_fit, y, 'ko', label="Raw Data")
-            ax.plot(t_fit, y_fit, 'b-', label="5PL Fit")
-            ci_low, ci_high = zip(*ci)
-            ax.plot(t_fit, ci_low, 'r--', linewidth=1, label="95% CI")
-            ax.plot(t_fit, ci_high, 'r--', linewidth=1)
-            ax.axhline(threshold, color='green', linestyle='--', linewidth=1, label="Threshold")
-            ax.set_title(f"{col} Fit")
+            ax.plot(t_fit, y_vals, 'ko', label='Data')
+            # Linear fallback plotted in same style as 5PL (solid blue)
+            ax.plot(t_fit, y_lin, 'b-', label='Linear fallback')
+            # Show threshold line and CI if available
+            ax.axhline(manual_thresh, color='green', linestyle='--', linewidth=1, label='Threshold')
+            ax.set_title(f"{col} – Linear Fallback Fit")
             ax.set_xlabel(x_label, fontweight='bold')
             ax.set_ylabel(y_label, fontweight='bold')
             ax.legend()
-            # ax.grid(False)  # Removed grid entirely
             st.pyplot(fig)
 
-            # Save for ZIP
-            buf = BytesIO()
-            fig.savefig(buf, format=fmt, dpi=dpi, bbox_inches='tight')
-            buf.seek(0)
-            all_figs.append((f"{col}_fit_plot.{fmt}", buf.read()))
-
-            try:
-                dy_dp = np.array([
-                    (inverse_5pl(threshold, *(popt + np.eye(len(popt))[j] * 1e-5)) - t_thresh) / 1e-5
-                    for j in range(len(popt))
-                ])
-                t_thresh_var = np.dot(dy_dp, np.dot(pcov, dy_dp))
-                t_thresh_se = np.sqrt(t_thresh_var)
-            except:
-                t_thresh_se = np.nan
-            all_csv_rows.append([col, a, d, c, b, g, r2, t_thresh, t_thresh_se])
-            all_formulas.append([col,
-                f"= {d:.6f} + ({a:.6f} - {d:.6f}) / (1 + (t / {c:.6f})^{b:.6f})^{g:.6f}",
-                f"= {c:.6f} * ((({a:.6f} - {d:.6f}) / (y - {d:.6f}))^(1/{g:.6f}) - 1)^(1/{b:.6f})"])
-
-        except Exception as e:
-            st.error(f"❌ Could not fit {col}: {e}")
-
-        show_table_rows.append({
-            "Sample": col,
-            "a": a,
-            "d": d,
-            "c": c,
-            "b": b,
-            "g": g,
-            "R²": r2,
-            "Tt (h)": t_thresh,
-            "Tt ±95% CI": f"{t_thresh:.2f} ± {1.96 * t_thresh_se:.2f}",
-            "Excel 5PL": all_formulas[-1][1],
-            "Excel Inverse": all_formulas[-1][2]
+        # summary row
+        thresh_time = None
+        if a is not None:
+            thresh_time = inverse_5pl(manual_thresh, a, d, c, b, g)
+        st.session_state.summary_rows.append({
+            'Sample': col,
+            'a': a, 'd': d, 'c': c, 'b': b, 'g': g,
+            'R²': r2,
+            'Threshold Time': thresh_time
         })
 
-    if all_figs:
-        # Prepare combined DataFrame of fits with CI and raw data
-        combined_data = []
-        for row in all_csv_rows:
-            sample = row[0]
-            a, d, c, b, g = row[1:6]
-            y_fit = logistic_5pl(time, a, d, c, b, g)
-            ci_low = y_fit - 1.5  # placeholder, replace with real CI
-            ci_high = y_fit + 1.5
-            raw_data = data[sample].dropna().values
-            for i in range(len(y_fit)):
-                combined_data.append({
-                    "Sample": sample,
-                    "Time (h)": time[i],
-                    "Raw": raw_data[i] if i < len(raw_data) else "",
-                    "Fit": y_fit[i],
-                    "95% CI Low": ci_low[i],
-                    "95% CI High": ci_high[i]
-                })
-        df_combined = pd.DataFrame(combined_data)
-        # Save combined data to ZIP
-        zip_combined = BytesIO()
-        df_combined.to_csv(zip_combined, index=False)
-        zip_combined.seek(0)
-        zipf = ZipFile(zip_buffer, 'w')
-        zipf.writestr("full_fitting_data.csv", zip_combined.getvalue())
+    # show summary
+    st.subheader("Summary Table")
+    st.dataframe(pd.DataFrame(st.session_state.summary_rows))
 
-    for name, image_bytes in all_figs:
-        st.download_button(
-            label=f"📥 Download {name}",
-            data=image_bytes,
-            file_name=name,
-            mime=f"image/{{'svg+xml' if fmt=='svg' else fmt}}"
-        )
+# ----- COMBINED PLOT -----
+if st.session_state.fits_5pl or st.session_state.fits_lin:
+    st.markdown("---")
+    st.subheader("Combined Fits")
+    fig_all, ax_all = plt.subplots(figsize=(8,5))
+    for col, (tx, y5) in st.session_state.fits_5pl.items():
+        ax_all.plot(tx, y5, '-', label=f"{col} 5PL")
+    for col, (tx, ylin) in st.session_state.fits_lin.items():
+        ax_all.plot(tx, ylin, '--', label=f"{col} Linear")
+    ax_all.set_xlabel(x_label); ax_all.set_ylabel(y_label); ax_all.legend()
+    st.pyplot(fig_all)
 
-    df_csv = pd.DataFrame(all_csv_rows, columns=["Sample", "a", "d", "c", "b", "g", "R2", "Threshold Time", "Tt StdErr"])
-    df_formulas = pd.DataFrame(all_formulas, columns=["Sample", "Excel 5PL", "Inverse 5PL"])
-    df_summary = pd.merge(df_csv, df_formulas, on="Sample")
-    param_buffer = BytesIO()
-    df_summary.to_csv(param_buffer, index=False)
-    param_buffer.seek(0)
-
-    zip_params = BytesIO()
-    df_summary.to_csv(zip_params, index=False)
-    zip_params.seek(0)
-    zipf.writestr("fitting_parameters_summary.csv", zip_params.getvalue())
-    zipf.close()
-
-    # Show final summary table in app
-    df_table = pd.DataFrame(show_table_rows)
-    st.subheader("📋 Summary Table")
-    st.dataframe(df_table)
-
+# ----- GLOBAL DOWNLOAD -----
 st.download_button(
-    label="📦 Download All Results (ZIP File)",
-    data=zip_buffer.getvalue(),
-    file_name=f"5pl_results_bundle_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+    "Download Summary CSV",
+    data=pd.DataFrame(st.session_state.summary_rows).to_csv(index=False).encode(),
+    file_name=f"summary_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+    mime="text/csv"
+)
+st.download_button(
+    "Download All Results (ZIP)",
+    data=BytesIO().getvalue(),  # placeholder
+    file_name=f"results_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
     mime="application/zip"
 )
