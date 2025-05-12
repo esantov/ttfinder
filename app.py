@@ -114,10 +114,10 @@ if st.button("Run Analysis"):
 
             # Plot with CI
             st.markdown(f"**{col} – 5PL Fit** (R² = {r2:.4f})")
-            fig, ax = plt.subplots(figsize=(8,6))
+            fig, ax = plt.subplots(figsize=(8,8))
             ax.plot(t_fit, y_vals, 'ko', label='Data')
             ax.plot(t_fit, y_fit, 'b-', label='5PL Fit')
-            ax.fill_between(t_fit, ci_low, ci_high, color='blue', alpha=0.2, label='95% CI')
+            ax.fill_between(t_fit, ci_low, ci_high, color='red', alpha=0.2, label='95% CI')
             ax.axhline(manual_thresh, color='green', linestyle='--', label='Threshold')
             ax.set_xlabel(x_label); ax.set_ylabel(y_label); ax.legend()
             st.pyplot(fig)
