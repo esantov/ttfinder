@@ -240,7 +240,68 @@ if not data.empty and len(data.columns) > 1:
                 st.error(f"❌ Fitting failed for {col}: {e}")
 
     combined_buf = generate_combined_plot(fit_results, manual_thresh, x_label, y_label, st.session_state['summary_rows'])
+# Patch the function with safe CI estimation logic for TT values
+def test_fit_4pl_on_user_data_safe(data, manual_thresh=25.0):
+    def logistic_4pl(x, a, d, c, b):
+        return d + (a - d) / (1 + (x / c) ** b)
 
+    summary_rows = []
+    fit_results = {}
+    time = data.iloc[:, 0].dropna().values
+
+    for col in data.columns[1:]:
+        y = data[col].dropna().values
+        x = time[:len(y)]
+        p0 = [min(y), max(y), np.median(x), 1]
+
+        try:
+            popt, pcov = curve_fit(logistic_4pl, x, y, p0=p0, maxfev=10000)
+            y_fit = logistic_4pl(x, *popt)
+            r2 = r2_score(y, y_fit)
+
+            tt_val = inverse_threshold_curve(manual_thresh, logistic_4pl, popt)
+            tt_ci_low = tt_ci_high = tt_stderr = None
+            if tt_val is not None and pcov.shape[0] == pcov.shape[1] == len(popt):
+                try:
+                    grad_tt = np.array([
+                        (inverse_threshold_curve(manual_thresh + 1e-5, logistic_4pl, popt) -
+                         inverse_threshold_curve(manual_thresh, logistic_4pl, popt)) / 1e-5
+                    ])
+                    if grad_tt.shape[0] == pcov.shape[0]:
+                        tt_stderr = np.sqrt(grad_tt @ pcov @ grad_tt.T)
+                        tval = t.ppf(0.975, len(x) - len(popt))
+                        delta = tval * tt_stderr
+                        tt_ci_low = tt_val - delta
+                        tt_ci_high = tt_val + delta
+                except Exception as inner_err:
+                    pass
+
+            summary_rows.append({
+                'Sample': col,
+                'Model': "4PL",
+                'R²': round(r2, 3),
+                'Threshold Time': tt_val,
+                'TT CI Lower': tt_ci_low,
+                'TT CI Upper': tt_ci_high,
+                'TT StdErr': tt_stderr[0] if isinstance(tt_stderr, np.ndarray) else None
+            })
+        except Exception as e:
+            summary_rows.append({
+                'Sample': col,
+                'Model': "4PL",
+                'R²': None,
+                'Threshold Time': None,
+                'TT CI Lower': None,
+                'TT CI Upper': None,
+                'TT StdErr': None,
+                'Error': str(e)
+            })
+
+    return pd.DataFrame(summary_rows)
+
+# Run the test safely
+test_summary_safe_df = test_fit_4pl_on_user_data_safe(user_data, manual_thresh=25.0)
+import ace_tools as tools; tools.display_dataframe_to_user(name="TT Finder Summary (Safe 4PL, Threshold = 25)", dataframe=test_summary_safe_df)
     st.download_button(
         "📦 Download All Plots (ZIP)",
         data=export_all_plots_zip(fit_results, st.session_state['summary_rows'], x_label, y_label, manual_thresh, combined_buf),
