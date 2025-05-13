@@ -95,97 +95,94 @@ if not data.empty and len(data.columns) > 1:
         y_vals = data[col].dropna().values
         x_vals = time_vals[:len(y_vals)]
 
-                with st.expander(f"{col}"):
-                    model_choice = st.selectbox("Choose model", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
-                    st.session_state.model_choices[col] = model_choice
-        x_vals = time_vals[:len(y_vals)]
-        
+        with st.expander(f"{col}"):
+            model_choice = st.selectbox("Choose model", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
+            st.session_state.model_choices[col] = model_choice
 
-                    model_func, p0 = None, None
-                    if model_choice == "5PL":
-            model_func = logistic_5pl
-            p0 = [min(y_vals), max(y_vals), np.median(x_vals), 1, 1]
-                    elif model_choice == "4PL":
-            model_func = logistic_4pl
-            p0 = [min(y_vals), max(y_vals), np.median(x_vals), 1]
-                    elif model_choice == "Sigmoid":
-            model_func = sigmoid
-            p0 = [max(y_vals), np.median(x_vals), 1]
+            model_func, p0 = None, None
+            if model_choice == "5PL":
+                model_func = logistic_5pl
+                p0 = [min(y_vals), max(y_vals), np.median(x_vals), 1, 1]
+            elif model_choice == "4PL":
+                model_func = logistic_4pl
+                p0 = [min(y_vals), max(y_vals), np.median(x_vals), 1]
+            elif model_choice == "Sigmoid":
+                model_func = sigmoid
+                p0 = [max(y_vals), np.median(x_vals), 1]
 
-        try:
-            if model_choice == "Linear":
-                coef = np.polyfit(x_vals, y_vals, 1)
-                y_fit = np.polyval(coef, x_vals)
-                r2 = r2_score(y_vals, y_fit)
-                popt = coef
-                y_ci = (y_fit, y_fit)
-            else:
-                popt, pcov = curve_fit(model_func, x_vals, y_vals, p0=p0, maxfev=10000)
-                y_fit = model_func(x_vals, *popt)
-                r2 = r2_score(y_vals, y_fit)
-                dof = max(len(x_vals) - len(popt), 1)
-                tval = t.ppf(0.975, dof)
-                ci_low, ci_high = [], []
-                for i, xi in enumerate(x_vals):
-                    grad = np.array([
-                        (model_func(xi, *(popt + np.eye(len(popt))[j]*1e-5)) - y_fit[i]) / 1e-5
-                        for j in range(len(popt))
-                    ])
-                    se = np.sqrt(grad @ pcov @ grad.T)
-                    delta = tval * se
-                    ci_low.append(y_fit[i] - delta)
-                    ci_high.append(y_fit[i] + delta)
-                y_ci = (np.array(ci_low), np.array(ci_high))
+            try:
+                if model_choice == "Linear":
+                    coef = np.polyfit(x_vals, y_vals, 1)
+                    y_fit = np.polyval(coef, x_vals)
+                    r2 = r2_score(y_vals, y_fit)
+                    popt = coef
+                    y_ci = (y_fit, y_fit)
+                else:
+                    popt, pcov = curve_fit(model_func, x_vals, y_vals, p0=p0, maxfev=10000)
+                    y_fit = model_func(x_vals, *popt)
+                    r2 = r2_score(y_vals, y_fit)
+                    dof = max(len(x_vals) - len(popt), 1)
+                    tval = t.ppf(0.975, dof)
+                    ci_low, ci_high = [], []
+                    for i, xi in enumerate(x_vals):
+                        grad = np.array([
+                            (model_func(xi, *(popt + np.eye(len(popt))[j]*1e-5)) - y_fit[i]) / 1e-5
+                            for j in range(len(popt))
+                        ])
+                        se = np.sqrt(grad @ pcov @ grad.T)
+                        delta = tval * se
+                        ci_low.append(y_fit[i] - delta)
+                        ci_high.append(y_fit[i] + delta)
+                    y_ci = (np.array(ci_low), np.array(ci_high))
 
-            tt_val = inverse_threshold_curve(manual_thresh, model_func if model_choice != "Linear" else lambda t, a, b: a*t + b, popt)
-            logcfu = None
-            if tt_val and 'calibration_coef' in st.session_state:
-                (a, b), cov = st.session_state.calibration_coef
-                logcfu = a * tt_val + b
+                tt_val = inverse_threshold_curve(manual_thresh, model_func if model_choice != "Linear" else lambda t, a, b: a*t + b, popt)
+                logcfu = None
+                if tt_val and 'calibration_coef' in st.session_state:
+                    (a, b), cov = st.session_state.calibration_coef
+                    logcfu = a * tt_val + b
 
-            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name=f'{col} (TT={tt_val:.2f}, CFU={logcfu:.2f})'))
-            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(color='rgba(0,0,0,0.2)', width=0), showlegend=False))
-            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name=f'{col} 95% CI', line=dict(color='rgba(0,0,0,0.2)', width=0)))
+                combined_fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name=f'{col} (TT={tt_val:.2f}, CFU={logcfu:.2f})'))
+                combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(color='rgba(0,0,0,0.2)', width=0), showlegend=False))
+                combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name=f'{col} 95% CI', line=dict(color='rgba(0,0,0,0.2)', width=0)))
 
-            st.session_state.model_params = st.session_state.get('model_params', {})
-            st.session_state.model_params[col] = popt if 'popt' in locals() else []
-            st.session_state.summary_rows.append({
-                'Sample': col,
-                'Model': model_choice,
-                'R²': round(r2, 4),
-                'Threshold Time': tt_val,
-                'Log CFU/mL': logcfu
-            })
+                st.session_state.model_params = st.session_state.get('model_params', {})
+                st.session_state.model_params[col] = popt if 'popt' in locals() else []
+                st.session_state.summary_rows.append({
+                    'Sample': col,
+                    'Model': model_choice,
+                    'R²': round(r2, 4),
+                    'Threshold Time': tt_val,
+                    'Log CFU/mL': logcfu
+                })
 
-            fit_results[col] = pd.DataFrame({
-                'Time': x_vals,
-                'Raw': y_vals,
-                'Fit': y_fit,
-                'CI Lower': y_ci[0],
-                'CI Upper': y_ci[1]
-            })
+                fit_results[col] = pd.DataFrame({
+                    'Time': x_vals,
+                    'Raw': y_vals,
+                    'Fit': y_fit,
+                    'CI Lower': y_ci[0],
+                    'CI Upper': y_ci[1]
+                })
 
-                    except Exception as e:
-            st.sidebar.error(f"Error fitting {col}: {e}")
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='Data', marker=dict(color='black')))
+                fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name='Fit', line=dict(color='blue')))
+                fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(color='rgba(255,0,0,0.2)', width=0), showlegend=False))
+                fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name='95% CI', line=dict(color='rgba(255,0,0,0.2)', width=0)))
+                fig.add_hline(y=manual_thresh, line_dash="dash", line_color="green", annotation_text="Threshold", annotation_position="top right")
+                if tt_val is not None:
+                    fig.add_vline(x=tt_val, line_dash="dot", line_color="green", annotation_text="TT", annotation_position="bottom right")
+                fig.update_layout(title=f"{col} Fit", margin=dict(l=40, r=40, t=60, b=40),
+                                  xaxis=dict(dtick=1, tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True),
+                                  yaxis=dict(tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True),
+                                  plot_bgcolor='white', legend=dict(x=1.02, y=1, xanchor='left', yanchor='top', bordercolor='black', borderwidth=1))
+                st.plotly_chart(fig, use_container_width=True)
 
-                    if 'y_fit' in locals():
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='Data', marker=dict(color='black')))
-            fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name='Fit', line=dict(color='blue')))
-            fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(color='rgba(255,0,0,0.2)', width=0), showlegend=False))
-            fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name='95% CI', line=dict(color='rgba(255,0,0,0.2)', width=0)))
-            fig.add_hline(y=manual_thresh, line_dash="dash", line_color="green", annotation_text="Threshold", annotation_position="top right")
-                        if tt_val is not None:
-                fig.add_vline(x=tt_val, line_dash="dot", line_color="green", annotation_text="TT", annotation_position="bottom right")
-            fig.update_layout(title=f"{col} Fit", margin=dict(l=40, r=40, t=60, b=40),
-                              xaxis=dict(dtick=1, tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True),
-                              yaxis=dict(tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True),
-                              plot_bgcolor='white', legend=dict(x=1.02, y=1, xanchor='left', yanchor='top', bordercolor='black', borderwidth=1))
-            st.plotly_chart(fig, use_container_width=True)
-        if tt_val is not None:
-            st.markdown(f"**Threshold Time (TT):** {tt_val:.2f} h")
-                    if logcfu is not None:
-            st.markdown(f"**Log CFU/mL:** {logcfu:.2f}")
+                if tt_val is not None:
+                    st.markdown(f"**Threshold Time (TT):** {tt_val:.2f} h")
+                if logcfu is not None:
+                    st.markdown(f"**Log CFU/mL:** {logcfu:.2f}")
+            except Exception as e:
+                st.sidebar.error(f"Error fitting {col}: {e}")
 
     st.subheader("Combined Fit Plot")
     st.plotly_chart(combined_fig, use_container_width=True)
