@@ -169,9 +169,9 @@ if not data.empty and len(data.columns) > 1:
             st.sidebar.error(f"Error fitting {col}: {e}")
 
     
-                st.markdown(f"**Threshold Time (TT):** {tt_val:.2f} h")
-                if logcfu is not None:
-                    st.markdown(f"**Log CFU/mL:** {logcfu:.2f}")
+            st.markdown(f"**Threshold Time (TT):** {tt_val:.2f} h")
+            if logcfu is not None:
+                st.markdown(f"**Log CFU/mL:** {logcfu:.2f}")
 
     st.subheader("Combined Fit Plot")
     st.plotly_chart(combined_fig, use_container_width=True)
