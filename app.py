@@ -93,7 +93,7 @@ if not data.empty and len(data.columns) > 1:
 
     for col in data.columns[1:]:
         y_vals = data[col].dropna().values
-        x_vals = time_vals[:len(y_vals)]
+    x_vals = time_vals[:len(y_vals)]
 
     with st.expander(f"{col}"):
         model_choice = st.selectbox("Choose model", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
@@ -168,10 +168,24 @@ if not data.empty and len(data.columns) > 1:
         except Exception as e:
             st.sidebar.error(f"Error fitting {col}: {e}")
 
-    
+        if 'y_fit' in locals():
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='Data', marker=dict(color='black')))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name='Fit', line=dict(color='blue')))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(color='rgba(255,0,0,0.2)', width=0), showlegend=False))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name='95% CI', line=dict(color='rgba(255,0,0,0.2)', width=0)))
+            fig.add_hline(y=manual_thresh, line_dash="dash", line_color="green", annotation_text="Threshold", annotation_position="top right")
+            if tt_val is not None:
+                fig.add_vline(x=tt_val, line_dash="dot", line_color="green", annotation_text="TT", annotation_position="bottom right")
+            fig.update_layout(title=f"{col} Fit", margin=dict(l=40, r=40, t=60, b=40),
+                              xaxis=dict(dtick=1, tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True),
+                              yaxis=dict(tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True),
+                              plot_bgcolor='white', legend=dict(x=1.02, y=1, xanchor='left', yanchor='top', bordercolor='black', borderwidth=1))
+            st.plotly_chart(fig, use_container_width=True)
+        if tt_val is not None:
             st.markdown(f"**Threshold Time (TT):** {tt_val:.2f} h")
-            if logcfu is not None:
-                st.markdown(f"**Log CFU/mL:** {logcfu:.2f}")
+        if logcfu is not None:
+            st.markdown(f"**Log CFU/mL:** {logcfu:.2f}")
 
     st.subheader("Combined Fit Plot")
     st.plotly_chart(combined_fig, use_container_width=True)
@@ -207,7 +221,7 @@ if not data.empty and len(data.columns) > 1:
                     'Model': model,
                     'Curve Formula': formula_map.get(model, ""),
                     'Inverse Formula': inverse_map.get(model, ""),
-                    'Parameters': ', '.join([f'{v:.4f}' for v in params]) if params else 'N/A'
+                    'Parameters': ', '.join([f'{v:.4f}' for v in params]) if isinstance(params, (list, tuple, np.ndarray)) else f'{params:.4f}' if params is not None else 'N/A'
                 })
             pd.DataFrame(param_rows).to_excel(writer, sheet_name='Fit Parameters', index=False)
             data.to_excel(writer, sheet_name='Original Data', index=False)
