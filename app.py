@@ -154,6 +154,7 @@ if not data.empty and len(data.columns) > 1:
 
             fit_results[col] = pd.DataFrame({
                 'Time': x_vals,
+                'Raw': y_vals,
                 'Fit': y_fit,
                 'CI Lower': y_ci[0],
                 'CI Upper': y_ci[1]
@@ -167,7 +168,7 @@ if not data.empty and len(data.columns) > 1:
         if col in fit_results:
             df = fit_results[col]
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df['Time'], y=data[col][:len(df)], mode='markers', name='Data', marker=dict(color='black')))
+            fig.add_trace(go.Scatter(x=df['Time'], y=df['Raw'], mode='markers', name='Data', marker=dict(color='black')))
             fig.add_trace(go.Scatter(x=df['Time'], y=df['Fit'], mode='lines', name='Fit', line=dict(color='blue')))
             fig.add_trace(go.Scatter(x=df['Time'], y=df['CI Lower'], fill=None, mode='lines', line=dict(color='rgba(255,0,0,0.2)', width=0), showlegend=False))
             fig.add_trace(go.Scatter(x=df['Time'], y=df['CI Upper'], fill='tonexty', mode='lines', name='95% CI', line=dict(color='rgba(255,0,0,0.2)', width=0)))
@@ -203,7 +204,10 @@ if not data.empty and len(data.columns) > 1:
             zip_file.writestr(f"fits/{sample}.csv", df.to_csv(index=False))
         # Save combined plot to PNG
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_img:
+            try:
             combined_fig.write_image(temp_img.name, format="png", scale=dpi/100)
+        except Exception as e:
+            st.warning(f"Plot image could not be saved: {e}")
             temp_img.seek(0)
             zip_file.writestr("combined_plot.png", temp_img.read())
     zip_buffer.seek(0)
