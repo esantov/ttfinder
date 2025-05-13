@@ -88,77 +88,9 @@ if not data.empty and len(data.columns) > 1:
     st.session_state.summary_rows.clear()
     fit_results = {}
     combined_fig = go.Figure()
-    combined_fig.update_layout(
-    title="Combined Model Fits",
-    xaxis_title=x_label,
-    yaxis_title=y_label,
-    plot_bgcolor='white',
-    margin=dict(l=40, r=40, t=60, b=40),
-    xaxis=dict(
-        range=[0, 24],
-        type='linear',
-        tickmode='linear',
-        dtick=1,
-        tickformat=".2f",
-        color='black',
-        linecolor='black',
-        linewidth=2,
-        showgrid=False,
-        mirror=True
-    ),
-    yaxis=dict(
-        range=[0, 100],
-        tickformat=".2f",
-        color='black',
-        linecolor='black',
-        linewidth=2,
-        showgrid=False,
-        mirror=True
-    )
-),
-    xaxis=dict(
-        range=[0, 24],
-        type='linear',
-        tickmode='linear',
-        dtick=1,
-        tickformat=".2f",
-        color='black',
-        linecolor='black',
-        linewidth=2,
-        showgrid=False,
-        mirror=True
-    ),
-    yaxis=dict(
-        range=[0, 100],
-        tickformat=".2f",
-        color='black',
-        linecolor='black',
-        linewidth=2,
-        showgrid=False,
-        mirror=True
-    ),
-    xaxis=dict(
-        type='linear',
-        tickmode='linear',
-        dtick=1,
-        tickformat=".2f",
-        color='black',
-        linecolor='black',
-        linewidth=2,
-        showgrid=False,
-        mirror=True
-    ),
-    yaxis=dict(
-        tickformat=".2f",
-        color='black',
-        linecolor='black',
-        linewidth=2,
-        showgrid=False,
-        mirror=True
-    ),
-    yaxis=dict(color='black', linecolor='black', showgrid=False)
 
     time_vals = data.iloc[:, 0].dropna().values
+
     for col in data.columns[1:]:
         y_vals = data[col].dropna().values
         x_vals = time_vals[:len(y_vals)]
@@ -214,10 +146,46 @@ if not data.empty and len(data.columns) > 1:
                 title += f" | LogCFU/mL: {logcfu:.2f}"
 
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='Data'))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='Data', marker=dict(color='black')))
             fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name='Fit'))
             fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(width=0), showlegend=False))
             fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name='95% CI', line=dict(width=0)))
+            fig.add_hline(y=manual_thresh, line_dash="dash", line_color="green", annotation_text="Threshold", annotation_position="top right")
+            fig.update_layout(
+                margin=dict(l=40, r=40, t=60, b=40),
+
+                title=title,
+                xaxis_title=x_label,
+                yaxis_title=y_label,
+                plot_bgcolor='white',
+                xaxis=dict(type='linear', tickmode='linear', dtick=1, tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True, range=[0, 24]),
+                yaxis=dict(range=[0, 100], tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name=f'{col} (TT={tt_val:.2f}, CFU={logcfu:.2f})'))
+            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(color='rgba(0,0,0,0.2)', width=0), showlegend=False))
+            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name=f'{col} 95% CI', line=dict(color='rgba(0,0,0,0.2)', width=0))))
+
+            st.session_state.summary_rows.append({
+                'Sample': col,
+                'Model': model_choice,
+                'R²': round(r2, 4),
+                'Threshold Time': tt_val,
+                'Log CFU/mL': logcfu
+            })
+
+            fit_results[col] = pd.DataFrame({
+                'Time': x_vals,
+                'Fit': y_fit,
+                'CI Lower': y_ci[0],
+                'CI Upper': y_ci[1]
+            })
+            fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='Data', marker=dict(color='black')))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name='Fit'))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(width=0), showlegend=False))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name='95% CI', line=dict(width=0)))
+            fig.add_hline(y=manual_thresh, line_dash="dash", line_color="green", annotation_text="Threshold", annotation_position="top right")
             fig.update_layout(
                 title=title,
                 xaxis_title=x_label,
