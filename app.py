@@ -156,7 +156,7 @@ if not data.empty and len(data.columns) > 1:
         showgrid=False,
         mirror=True
     ),
-        yaxis=dict(color='black', linecolor='black', showgrid=False)
+    yaxis=dict(color='black', linecolor='black', showgrid=False)
     )
 
     time_vals = data.iloc[:, 0].dropna().values
