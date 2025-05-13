@@ -92,9 +92,12 @@ if not data.empty and len(data.columns) > 1:
     time_vals = data.iloc[:, 0].dropna().values
 
     for col in data.columns[1:]:
-        model_choice = st.selectbox(f"Choose model for {col}", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
+    y_vals = data[col].dropna().values
+    x_vals = time_vals[:len(y_vals)]
+
+    with st.expander(f"{col}"):
+        model_choice = st.selectbox("Choose model", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
         st.session_state.model_choices[col] = model_choice
-        y_vals = data[col].dropna().values
         x_vals = time_vals[:len(y_vals)]
         
 
@@ -165,30 +168,7 @@ if not data.empty and len(data.columns) > 1:
         except Exception as e:
             st.sidebar.error(f"Error fitting {col}: {e}")
 
-    for col in data.columns[1:]:
-        if col in fit_results:
-            df = fit_results[col]
-            with st.expander(f"{col} – Model: {st.session_state.model_choices[col]}"):
-                st.session_state.model_choices[col] = model_choice
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=df['Time'], y=df['Raw'], mode='markers', name='Data', marker=dict(color='black')))
-                fig.add_trace(go.Scatter(x=df['Time'], y=df['Fit'], mode='lines', name='Fit', line=dict(color='blue')))
-                fig.add_trace(go.Scatter(x=df['Time'], y=df['CI Lower'], fill=None, mode='lines', line=dict(color='rgba(255,0,0,0.2)', width=0), showlegend=False))
-                fig.add_trace(go.Scatter(x=df['Time'], y=df['CI Upper'], fill='tonexty', mode='lines', name='95% CI', line=dict(color='rgba(255,0,0,0.2)', width=0)))
-                fig.add_hline(y=manual_thresh, line_dash="dash", line_color="green", annotation_text="Threshold", annotation_position="top right")
-                tt_val = next((row['Threshold Time'] for row in st.session_state.summary_rows if row['Sample'] == col), None)
-                if tt_val:
-                    fig.add_vline(x=tt_val, line_dash="dot", line_color="green", annotation_text="TT", annotation_position="bottom right")
-                fig.update_layout(
-                    title=f"{col} Fit",
-                    margin=dict(l=40, r=40, t=60, b=40),
-                    xaxis=dict(type='linear', dtick=1, tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True, range=[0, 24]),
-                    yaxis=dict(range=[0, 100], tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True),
-                    plot_bgcolor='white',
-                    legend=dict(x=1.02, y=1, xanchor='left', yanchor='top', bordercolor='black', borderwidth=1)
-                )
-                st.plotly_chart(fig, use_container_width=True)
-                if tt_val is not None:
+    
                     st.markdown(f"**Threshold Time (TT):** {tt_val:.2f} h")
                 if logcfu is not None:
                     st.markdown(f"**Log CFU/mL:** {logcfu:.2f}")
