@@ -143,6 +143,8 @@ if not data.empty and len(data.columns) > 1:
             combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(color='rgba(0,0,0,0.2)', width=0), showlegend=False))
             combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name=f'{col} 95% CI', line=dict(color='rgba(0,0,0,0.2)', width=0)))
 
+            st.session_state.model_params = st.session_state.get('model_params', {})
+            st.session_state.model_params[col] = popt if 'popt' in locals() else []
             st.session_state.summary_rows.append({
                 'Sample': col,
                 'Model': model_choice,
@@ -189,22 +191,40 @@ if not data.empty and len(data.columns) > 1:
     st.plotly_chart(combined_fig, use_container_width=True)
 
     zip_buffer = BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-        summary_df = pd.DataFrame(st.session_state.summary_rows)
-        zip_file.writestr("summary.csv", summary_df.to_csv(index=False))
-        zip_file.writestr("original_data.csv", data.to_csv(index=False))
-        if 'calibration_coef' in st.session_state:
-            (a, b), _ = st.session_state['calibration_coef']
-            calib_df = pd.DataFrame({"Calibration Name": [calib_name], "Slope": [a], "Intercept": [b]})
-            zip_file.writestr("calibration.csv", calib_df.to_csv(index=False))
-        for sample, df in fit_results.items():
-            zip_file.writestr(f"fits/{sample}.csv", df.to_csv(index=False))
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_img:
-            try:
-                combined_fig.write_image(temp_img.name, format="png", scale=dpi/100)
-                temp_img.seek(0)
-                zip_file.writestr("combined_plot.png", temp_img.read())
-            except Exception as e:
-                st.warning(f"Plot image could not be saved: {e}")
-    zip_buffer.seek(0)
+    with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as temp_excel:
+        with pd.ExcelWriter(temp_excel.name, engine='xlsxwriter') as writer:
+            pd.DataFrame(st.session_state.summary_rows).to_excel(writer, sheet_name='Summary', index=False)
+            for sample, df in fit_results.items():
+                df.to_excel(writer, sheet_name=sample[:31], index=False)
+            if 'calibration_coef' in st.session_state:
+                (a, b), _ = st.session_state['calibration_coef']
+                calib_df = pd.DataFrame({"Calibration Name": [calib_name], "Slope": [a], "Intercept": [b]})
+                calib_df.to_excel(writer, sheet_name='Calibration', index=False)
+            param_rows = []
+            formula_map = {
+                '5PL': "y = d + (a - d) / (1 + (x / c)^b)^g",
+                '4PL': "y = d + (a - d) / (1 + (x / c)^b)",
+                'Sigmoid': "y = L / (1 + exp(-k*(x - x0)))",
+                'Linear': "y = a*x + b"
+            }
+            inverse_map = {
+                '5PL': "x = c * (((a - d)/(y - d))^(1/g) - 1)^(1/b)",
+                '4PL': "x = c * ((a - d)/(y - d) - 1)^(1/b)",
+                'Sigmoid': "x = x0 - log((L/y) - 1)/k",
+                'Linear': "x = (y - b) / a"
+            }
+            for row in st.session_state.summary_rows:
+                model = row['Model']
+                params = st.session_state.get('model_params', {}).get(row['Sample'], [])
+                param_rows.append({
+                    'Sample': row['Sample'],
+                    'Model': model,
+                    'Curve Formula': formula_map.get(model, ""),
+                    'Inverse Formula': inverse_map.get(model, ""),
+                    'Parameters': ', '.join([f'{v:.4f}' for v in params]) if params else 'N/A'
+                })
+            pd.DataFrame(param_rows).to_excel(writer, sheet_name='Fit Parameters', index=False)
+            data.to_excel(writer, sheet_name='Original Data', index=False)
+        temp_excel.seek(0)
+        st.download_button("📥 Download Excel Report", data=temp_excel.read(), file_name="tt_finder_report.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     st.download_button("📦 Download All Results as ZIP", data=zip_buffer.read(), file_name="tt_finder_results.zip", mime="application/zip")
