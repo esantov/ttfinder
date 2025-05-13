@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -56,7 +57,11 @@ def generate_combined_plot(fit_results_dict, threshold, x_label, y_label, summar
     for row in summary_rows:
         sample = row['Sample']
         df = fit_results_dict[sample]
-        label = f"{sample} (TT={row['Threshold Time']:.2f}, CFU={row['Log CFU/mL']:.2f})"
+        tt = row.get('Threshold Time')
+        logcfu = row.get('Log CFU/mL')
+        tt_str = f"{tt:.2f}" if tt is not None else "N/A"
+        logcfu_str = f"{logcfu:.2f}" if logcfu is not None else "N/A"
+        label = f"{sample} (TT={tt_str}, CFU={logcfu_str})"
         ax.plot(df['Time'], df['Fit'], label=label)
         ax.fill_between(df['Time'], df['CI Lower'], df['CI Upper'], alpha=0.3)
     ax.axhline(y=threshold, color='green', linestyle='--', label='Threshold')
