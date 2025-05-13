@@ -27,7 +27,7 @@ def inverse_threshold_curve(y, model_func, popt):
     except:
         return None
 
-# --- UI & Inputs ---
+# --- UI ---
 st.title("📈 TT Finder - Curve Fitting Tool")
 x_label = st.text_input("X-axis label", "Time (h)")
 y_label = st.text_input("Y-axis label", "Signal")
@@ -107,7 +107,24 @@ def export_all_plots_zip(fit_results, summary_rows, x_label, y_label, threshold,
     zip_buffer.seek(0)
     return zip_buffer
 
-# --- Analysis Loop ---
+def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y_label):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        if not data.empty:
+            data.to_excel(writer, sheet_name="Original Data", index=False)
+        if calibration:
+            (a, b), _ = calibration
+            pd.DataFrame({"Calibration Name": ["Manual"], "Slope": [a], "Intercept": [b]}).to_excel(writer, sheet_name="Calibration", index=False)
+        if summary_rows:
+            pd.DataFrame(summary_rows).to_excel(writer, sheet_name="Summary", index=False)
+
+        for sample, df in fit_results.items():
+            df.to_excel(writer, sheet_name=sample[:31], index=False)
+
+    output.seek(0)
+    return output
+
+# --- Analysis ---
 if not data.empty and len(data.columns) > 1:
     time = data.iloc[:, 0].dropna().values
     for col in data.columns[1:]:
@@ -118,17 +135,13 @@ if not data.empty and len(data.columns) > 1:
             model = st.selectbox("Model", ["5PL", "4PL", "Sigmoid", "Linear"], key=col)
 
             if model == "5PL":
-                func = logistic_5pl
-                p0 = [min(y), max(y), np.median(x), 1, 1]
+                func = logistic_5pl; p0 = [min(y), max(y), np.median(x), 1, 1]
             elif model == "4PL":
-                func = logistic_4pl
-                p0 = [min(y), max(y), np.median(x), 1]
+                func = logistic_4pl; p0 = [min(y), max(y), np.median(x), 1]
             elif model == "Sigmoid":
-                func = sigmoid
-                p0 = [max(y), np.median(x), 1]
+                func = sigmoid; p0 = [max(y), np.median(x), 1]
             else:
-                func = lambda x, a, b: a * x + b
-                p0 = None
+                func = lambda x, a, b: a * x + b; p0 = None
 
             try:
                 if model == "Linear":
@@ -158,13 +171,7 @@ if not data.empty and len(data.columns) > 1:
 
                 fit_df = pd.DataFrame({'Time': x, 'Raw': y, 'Fit': y_fit, 'CI Lower': y_ci[0], 'CI Upper': y_ci[1]})
                 fit_results[col] = fit_df
-                st.session_state.summary_rows.append({
-                    'Sample': col,
-                    'Model': model,
-                    'R²': round(r2, 3),
-                    'Threshold Time': tt_val,
-                    'Log CFU/mL': logcfu
-                })
+                st.session_state.summary_rows.append({'Sample': col, 'Model': model, 'R²': round(r2, 3), 'Threshold Time': tt_val, 'Log CFU/mL': logcfu})
 
                 img_buf = generate_sample_plot(col, fit_df, x_label, y_label, manual_thresh, tt_val)
                 st.image(img_buf, caption=f"{col} Fit", use_container_width=True)
@@ -172,30 +179,10 @@ if not data.empty and len(data.columns) > 1:
             except Exception as e:
                 st.error(f"❌ Fitting failed for {col}: {e}")
 
-    # --- Final Export ---
-    st.subheader("📦 Export All Plots")
     combined_buf = generate_combined_plot(fit_results, manual_thresh, x_label, y_label)
     zip_buf = export_all_plots_zip(fit_results, st.session_state.summary_rows, x_label, y_label, manual_thresh, combined_buf)
+    st.download_button("📦 Download All Plots (ZIP)", data=zip_buf, file_name=f"tt_finder_plots_{datetime.datetime.now():%Y%m%d_%H%M%S}.zip", mime="application/zip")
 
-    st.download_button(
-        "Download All Plots (ZIP)",
-        data=zip_buf,
-        file_name=f"tt_finder_plots_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
-        mime="application/zip"
-    )
-if data is not None and summary_rows:
-    excel_buf = create_excel_report(
-        data=data,
-        fit_results=fit_results,
-        summary_rows=st.session_state['summary_rows'],
-        calibration=st.session_state.get('calibration_coef'),
-        x_label=x_label,
-        y_label=y_label
-    )
-
-    st.download_button(
-        label="📥 Download Excel Report",
-        data=excel_buf,
-        file_name=f"tt_finder_report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    # Excel Export
+    excel_buf = create_excel_report(data, fit_results, st.session_state.summary_rows, st.session_state.get('calibration_coef'), x_label, y_label)
+    st.download_button("📥 Download Excel Report", data=excel_buf, file_name=f"tt_finder_report_{datetime.datetime.now():%Y%m%d_%H%M%S}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
