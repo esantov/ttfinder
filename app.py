@@ -94,8 +94,7 @@ if not data.empty and len(data.columns) > 1:
     for col in data.columns[1:]:
         y_vals = data[col].dropna().values
         x_vals = time_vals[:len(y_vals)]
-        model_choice = st.selectbox(f"Model for {col}", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
-        st.session_state.model_choices[col] = model_choice
+        
 
         model_func, p0 = None, None
         if model_choice == "5PL":
@@ -167,7 +166,9 @@ if not data.empty and len(data.columns) > 1:
     for col in data.columns[1:]:
         if col in fit_results:
             df = fit_results[col]
-            with st.expander(f"{col} – Model: {st.session_state.model_choices[col]}"):
+            with st.expander(f"{col}"):
+                model_choice = st.selectbox("Choose Model", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
+                st.session_state.model_choices[col] = model_choice
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=df['Time'], y=df['Raw'], mode='markers', name='Data', marker=dict(color='black')))
                 fig.add_trace(go.Scatter(x=df['Time'], y=df['Fit'], mode='lines', name='Fit', line=dict(color='blue')))
@@ -186,6 +187,10 @@ if not data.empty and len(data.columns) > 1:
                     legend=dict(x=1.02, y=1, xanchor='left', yanchor='top', bordercolor='black', borderwidth=1)
                 )
                 st.plotly_chart(fig, use_container_width=True)
+                if tt_val is not None:
+                    st.markdown(f"**Threshold Time (TT):** {tt_val:.2f} h")
+                if logcfu is not None:
+                    st.markdown(f"**Log CFU/mL:** {logcfu:.2f}")
 
     st.subheader("Combined Fit Plot")
     st.plotly_chart(combined_fig, use_container_width=True)
