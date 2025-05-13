@@ -65,8 +65,20 @@ else:
 
 # Data input
 st.markdown("### Data Input")
-example_data = pd.DataFrame({"Time": np.arange(0, 4.25, 0.25), "Sample1": np.linspace(2, 20, 18), "Sample2": np.linspace(3, 25, 18)})
-data = st.data_editor(example_data, num_rows="dynamic", use_container_width=True)
+uploaded = st.file_uploader("Upload data CSV (first column = Time)", type="csv")
+
+if uploaded:
+    data = pd.read_csv(uploaded)
+    st.success("Data loaded from file.")
+else:
+    example_time = np.arange(0, 4.25, 0.25)
+    example_data = pd.DataFrame({
+        "Time": example_time,
+        "Sample1": np.linspace(2, 20, len(example_time)),
+        "Sample2": np.linspace(3, 25, len(example_time))
+    })
+    st.info("Paste or edit your data below:")
+    data = st.data_editor(example_data, num_rows="dynamic", use_container_width=True)
 
 st.session_state.summary_rows.clear()
 
