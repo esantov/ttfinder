@@ -187,7 +187,7 @@ if not data.empty and len(data.columns) > 1:
                     try:
                         fig.write_image(tmp.name, format=fmt, scale=dpi/100)
                         tmp.seek(0)
-                                                    label=f"📥 Download {col} Plot ({fmt.upper()})",
+                            label=f"📥 Download {col} Plot ({fmt.upper()})",
                             data=tmp.read(),
                             file_name=f"{col}_fit.{fmt}",
                             mime=f"image/{{'svg+xml' if fmt=='svg' else fmt}}"
