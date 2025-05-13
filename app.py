@@ -77,4 +77,109 @@ if uploaded_data:
 else:
     data = st.data_editor(pd.DataFrame({"Time": []}), num_rows="dynamic", use_container_width=True)
 
-# (Analysis code continues unchanged...)
+# Run analysis if data is available
+if not data.empty and len(data.columns) > 1:
+    from scipy.optimize import root_scalar
+    st.session_state.summary_rows.clear()
+    fit_results = {}
+    combined_fig = go.Figure()
+    combined_fig.update_layout(
+        title="Combined Model Fits",
+        xaxis_title=x_label,
+        yaxis_title=y_label,
+        plot_bgcolor='white',
+        xaxis=dict(color='black', linecolor='black', showgrid=False),
+        yaxis=dict(color='black', linecolor='black', showgrid=False)
+    )
+
+    time_vals = data.iloc[:, 0].dropna().values
+    for col in data.columns[1:]:
+        y_vals = data[col].dropna().values
+        x_vals = time_vals[:len(y_vals)]
+        model_choice = st.selectbox(f"Model for {col}", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
+        st.session_state.model_choices[col] = model_choice
+
+        model_func, p0 = None, None
+        if model_choice == "5PL":
+            model_func = logistic_5pl
+            p0 = [min(y_vals), max(y_vals), np.median(x_vals), 1, 1]
+        elif model_choice == "4PL":
+            model_func = logistic_4pl
+            p0 = [min(y_vals), max(y_vals), np.median(x_vals), 1]
+        elif model_choice == "Sigmoid":
+            model_func = sigmoid
+            p0 = [max(y_vals), np.median(x_vals), 1]
+
+        try:
+            if model_choice == "Linear":
+                coef = np.polyfit(x_vals, y_vals, 1)
+                y_fit = np.polyval(coef, x_vals)
+                r2 = r2_score(y_vals, y_fit)
+                popt = coef
+                y_ci = (y_fit, y_fit)
+            else:
+                popt, pcov = curve_fit(model_func, x_vals, y_vals, p0=p0, maxfev=10000)
+                y_fit = model_func(x_vals, *popt)
+                r2 = r2_score(y_vals, y_fit)
+                dof = max(len(x_vals) - len(popt), 1)
+                tval = t.ppf(0.975, dof)
+                ci_low, ci_high = [], []
+                for i, xi in enumerate(x_vals):
+                    grad = np.array([
+                        (model_func(xi, *(popt + np.eye(len(popt))[j]*1e-5)) - y_fit[i]) / 1e-5
+                        for j in range(len(popt))
+                    ])
+                    se = np.sqrt(grad @ pcov @ grad.T)
+                    delta = tval * se
+                    ci_low.append(y_fit[i] - delta)
+                    ci_high.append(y_fit[i] + delta)
+                y_ci = (np.array(ci_low), np.array(ci_high))
+
+            tt_val = inverse_threshold_curve(manual_thresh, model_func if model_choice != "Linear" else lambda t, a, b: a*t + b, popt)
+            logcfu = None
+            if tt_val and 'calibration_coef' in st.session_state:
+                (a, b), cov = st.session_state.calibration_coef
+                logcfu = a * tt_val + b
+
+            title = f"{col} – {model_choice} Fit"
+            if tt_val is not None:
+                title += f" | TT: {tt_val:.2f}"
+            if logcfu is not None:
+                title += f" | LogCFU/mL: {logcfu:.2f}"
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='Data'))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name='Fit'))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(width=0), showlegend=False))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name='95% CI', line=dict(width=0)))
+            fig.update_layout(
+                title=title,
+                xaxis_title=x_label,
+                yaxis_title=y_label,
+                plot_bgcolor='white',
+                xaxis=dict(color='black', linecolor='black', showgrid=False),
+                yaxis=dict(color='black', linecolor='black', showgrid=False)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name=f'{col} (TT={tt_val:.2f}, CFU={logcfu:.2f})'))
+            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(width=0), showlegend=False))
+            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name=f'{col} 95% CI', line=dict(width=0)))
+
+            st.session_state.summary_rows.append({
+                'Sample': col,
+                'Model': model_choice,
+                'R²': round(r2, 4),
+                'Threshold Time': tt_val,
+                'Log CFU/mL': logcfu
+            })
+
+            fit_results[col] = pd.DataFrame({
+                'Time': x_vals,
+                'Fit': y_fit,
+                'CI Lower': y_ci[0],
+                'CI Upper': y_ci[1]
+            })
+
+        except Exception as e:
+            st.sidebar.error(f"Error fitting {col}: {e}")
