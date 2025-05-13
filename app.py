@@ -51,6 +51,11 @@ def generate_sample_plot(sample, df, x_label, y_label, threshold, tt_val=None, l
     plt.close(fig)
     return buf
 
+# --- Summary Table: TT and Log CFU/mL ---
+if st.session_state.get("summary_rows"):
+    summary_df = pd.DataFrame(st.session_state["summary_rows"])[["Sample", "Threshold Time", "Log CFU/mL"]]
+    st.markdown("### 🧾 TT and Log CFU/mL Summary")
+    st.dataframe(summary_df, use_container_width=True)
 
 def generate_combined_plot(fit_results_dict, threshold, x_label, y_label, summary_rows):
     fig, ax = plt.subplots(figsize=(10, 6))
