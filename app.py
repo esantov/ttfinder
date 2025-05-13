@@ -193,7 +193,7 @@ if not data.empty and len(data.columns) > 1:
                             file_name=f"{col}_fit.{fmt}",
                             mime=f"image/{'svg+xml' if fmt=='svg' else fmt}"
                         )
-                        )
+                       
                     except Exception as e:
                         st.warning(f"⚠️ Could not export plot for {col}. Please ensure Kaleido is installed.
 To install it, run:`pip install -U kaleido`")
