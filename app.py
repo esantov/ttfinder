@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -154,3 +153,87 @@ if 'summary_rows' not in st.session_state:
     st.session_state['summary_rows'] = []
 
 fit_results = {}
+
+
+# --- Analysis Logic ---
+if not data.empty and len(data.columns) > 1:
+    time = data.iloc[:, 0].dropna().values
+    for col in data.columns[1:]:
+        y = data[col].dropna().values
+        x = time[:len(y)]
+
+        with st.expander(f"{col}"):
+            model = st.selectbox("Model", ["5PL", "4PL", "Sigmoid", "Linear"], key=col)
+
+            if model == "5PL":
+                func = logistic_5pl; p0 = [min(y), max(y), np.median(x), 1, 1]
+            elif model == "4PL":
+                func = logistic_4pl; p0 = [min(y), max(y), np.median(x), 1]
+            elif model == "Sigmoid":
+                func = sigmoid; p0 = [max(y), np.median(x), 1]
+            else:
+                func = lambda x, a, b: a * x + b; p0 = None
+
+            try:
+                if model == "Linear":
+                    popt = np.polyfit(x, y, 1)
+                    y_fit = np.polyval(popt, x)
+                    y_ci = (y_fit, y_fit)
+                else:
+                    popt, pcov = curve_fit(func, x, y, p0=p0, maxfev=10000)
+                    y_fit = func(x, *popt)
+                    dof = len(x) - len(popt)
+                    tval = t.ppf(0.975, dof)
+                    ci_low, ci_high = [], []
+                    for i, xi in enumerate(x):
+                        grad = np.array([(func(xi, *(popt + np.eye(len(popt))[j]*1e-5)) - y_fit[i]) / 1e-5 for j in range(len(popt))])
+                        se = np.sqrt(grad @ pcov @ grad.T)
+                        delta = tval * se
+                        ci_low.append(y_fit[i] - delta)
+                        ci_high.append(y_fit[i] + delta)
+                    y_ci = (np.array(ci_low), np.array(ci_high))
+
+                r2 = r2_score(y, y_fit)
+                tt_val = inverse_threshold_curve(manual_thresh, func, popt)
+                logcfu = None
+                if tt_val and 'calibration_coef' in st.session_state:
+                    a, b = st.session_state['calibration_coef'][0]
+                    logcfu = a * tt_val + b
+
+                fit_df = pd.DataFrame({'Time': x, 'Raw': y, 'Fit': y_fit, 'CI Lower': y_ci[0], 'CI Upper': y_ci[1]})
+                fit_results[col] = fit_df
+                st.session_state.summary_rows.append({
+                    'Sample': col,
+                    'Model': model,
+                    'R²': round(r2, 3),
+                    'Threshold Time': tt_val,
+                    'Log CFU/mL': logcfu
+                })
+
+                img_buf = generate_sample_plot(col, fit_df, x_label, y_label, manual_thresh, tt_val, logcfu)
+                st.image(img_buf, caption=f"{col} Fit", use_container_width=True)
+
+            except Exception as e:
+                st.error(f"❌ Fitting failed for {col}: {e}")
+
+    combined_buf = generate_combined_plot(fit_results, manual_thresh, x_label, y_label, st.session_state['summary_rows'])
+
+    st.download_button(
+        "📦 Download All Plots (ZIP)",
+        data=export_all_plots_zip(fit_results, st.session_state['summary_rows'], x_label, y_label, manual_thresh, combined_buf),
+        file_name=f"tt_finder_plots_{datetime.datetime.now():%Y%m%d_%H%M%S}.zip",
+        mime="application/zip"
+    )
+
+    excel_buf = create_excel_report(
+        data, fit_results, st.session_state['summary_rows'],
+        st.session_state.get('calibration_coef'),
+        x_label, y_label
+    )
+
+    st.download_button(
+        "📥 Download Excel Report",
+        data=excel_buf,
+        file_name=f"tt_finder_report_{datetime.datetime.now():%Y%m%d_%H%M%S}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
