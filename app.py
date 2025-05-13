@@ -18,6 +18,9 @@ for key in ['fits', 'ci', 'summary_rows', 'model_choices', 'calibration_coef']:
 
 # [Same model functions and user input code as before]
 
+# Prepare summary_df before usage
+summary_df = pd.DataFrame(st.session_state.summary_rows)
+
 # Combined plot image generation
 combined_fig_path = None
 if not summary_df.empty:
