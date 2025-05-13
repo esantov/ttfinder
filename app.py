@@ -160,7 +160,7 @@ if not data.empty and len(data.columns) > 1:
                 'CI Upper': y_ci[1]
             })
 
-        except Exception as e:
+                    except Exception as e:
             st.sidebar.error(f"Error fitting {col}: {e}")
 
     # Show individual plots per sample
@@ -205,10 +205,10 @@ if not data.empty and len(data.columns) > 1:
         # Save combined plot to PNG
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_img:
             try:
-            combined_fig.write_image(temp_img.name, format="png", scale=dpi/100)
+                combined_fig.write_image(temp_img.name, format="png", scale=dpi/100)
         except Exception as e:
-            st.warning(f"Plot image could not be saved: {e}")
-            temp_img.seek(0)
-            zip_file.writestr("combined_plot.png", temp_img.read())
+                            st.warning(f"Plot image could not be saved: {e}")
+                            temp_img.seek(0)
+                            zip_file.writestr("combined_plot.png", temp_img.read())
     zip_buffer.seek(0)
     st.download_button("📦 Download All Results as ZIP", data=zip_buffer.read(), file_name="tt_finder_results.zip", mime="application/zip")
