@@ -309,7 +309,7 @@ st.download_button(
         mime="application/zip"
     )
 
-    excel_buf = create_excel_report(
+excel_buf = create_excel_report(
         data, fit_results, st.session_state['summary_rows'],
         st.session_state.get('calibration_coef'),
         x_label, y_label
