@@ -195,13 +195,12 @@ if not data.empty and len(data.columns) > 1:
                         )
                         
                     except Exception as e:
-
-                if tt_val is not None:
-                    st.markdown(f"**Threshold Time (TT):** {tt_val:.2f} h")
-                if logcfu is not None:
-                    st.markdown(f"**Log CFU/mL:** {logcfu:.2f}")
-            except Exception as e:
-                st.sidebar.error(f"Error fitting {col}: {e}")
+                    if tt_val is not None:
+                        st.markdown(f"**Threshold Time (TT):** {tt_val:.2f} h")
+                    if logcfu is not None:
+                        st.markdown(f"**Log CFU/mL:** {logcfu:.2f}")
+                    except Exception as e:
+                        st.sidebar.error(f"Error fitting {col}: {e}")
 
     st.subheader("Combined Fit Plot")
     combined_fig.update_layout(
