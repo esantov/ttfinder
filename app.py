@@ -136,8 +136,7 @@ if not data.empty and len(data.columns) > 1:
         linewidth=2,
         showgrid=False,
         mirror=True
-    )
-),
+    ),
     xaxis=dict(
         type='linear',
         tickmode='linear',
