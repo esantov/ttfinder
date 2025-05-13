@@ -70,25 +70,22 @@ else:
 
 # Data input
 st.markdown("### Data Input")
-uploaded = st.file_uploader("Upload data CSV (first column = Time)", type="csv")
-if uploaded:
-    data = pd.read_csv(uploaded)
-    st.success("Data loaded from file.")
-else:
-    example_time = np.arange(0, 4.25, 0.25)
-    example_data = pd.DataFrame({
-        "Time": example_time,
-        "Sample1": np.linspace(2, 20, len(example_time)),
-        "Sample2": np.linspace(3, 25, len(example_time))
-    })
-    data = st.data_editor(example_data, num_rows="dynamic", use_container_width=True)
+data = st.data_editor(pd.DataFrame({"Time": []}), num_rows="dynamic", use_container_width=True)
 
 # Analysis
 st.session_state.summary_rows.clear()
 fit_results = {}
 combined_fig = go.Figure()
+combined_fig.update_layout(
+    title="Combined Model Fits",
+    xaxis_title=x_label,
+    yaxis_title=y_label,
+    plot_bgcolor='white',
+    xaxis=dict(color='black', linecolor='black', showgrid=False),
+    yaxis=dict(color='black', linecolor='black', showgrid=False)
+)
 
-if not data.empty:
+if not data.empty and len(data.columns) > 1:
     time_vals = data.iloc[:, 0].dropna().values
 
     for col in data.columns[1:]:
@@ -139,7 +136,28 @@ if not data.empty:
                 (a, b), cov = st.session_state.calibration_coef
                 logcfu = a * tt + b
 
-            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name=f'{col}'))
+            title = f"{col} – {model_choice} Fit"
+            if tt is not None:
+                title += f" | TT: {tt:.2f}"
+            if logcfu is not None:
+                title += f" | LogCFU/mL: {logcfu:.2f}"
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='Data'))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name='Fit'))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(width=0), showlegend=False))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name='95% CI', line=dict(width=0)))
+            fig.update_layout(
+                title=title,
+                xaxis_title=x_label,
+                yaxis_title=y_label,
+                plot_bgcolor='white',
+                xaxis=dict(color='black', linecolor='black', showgrid=False),
+                yaxis=dict(color='black', linecolor='black', showgrid=False)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name=f'{col} (TT={tt:.2f}, CFU={logcfu:.2f})'))
             combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(width=0), showlegend=False))
             combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name=f'{col} 95% CI', line=dict(width=0)))
 
@@ -166,8 +184,7 @@ summary_df = pd.DataFrame(st.session_state.summary_rows)
 if not summary_df.empty:
     st.subheader("Summary Table")
     st.dataframe(summary_df)
-
-    combined_fig.update_layout(title="Combined Model Fits", xaxis_title=x_label, yaxis_title=y_label)
+    st.subheader("Combined Fit Plot")
     st.plotly_chart(combined_fig, use_container_width=True)
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=f".{fmt}") as tmp_img:
