@@ -93,7 +93,9 @@ if not data.empty and len(data.columns) > 1:
 
     for col in data.columns[1:]:
         y_vals = data[col].dropna().values
-    x_vals = time_vals[:len(y_vals)]
+        x_vals = time_vals[:len(y_vals)]
+
+        
 
     with st.expander(f"{col}"):
         model_choice = st.selectbox("Choose model", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
