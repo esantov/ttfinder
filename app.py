@@ -85,7 +85,6 @@ else:
 
 # Run analysis if data is available
 if not data.empty and len(data.columns) > 1:
-    from scipy.optimize import root_scalar
     st.session_state.summary_rows.clear()
     fit_results = {}
     combined_fig = go.Figure()
@@ -160,10 +159,9 @@ if not data.empty and len(data.columns) > 1:
                 'CI Upper': y_ci[1]
             })
 
-                    except Exception as e:
+        except Exception as e:
             st.sidebar.error(f"Error fitting {col}: {e}")
 
-    # Show individual plots per sample
     for col in data.columns[1:]:
         if col in fit_results:
             df = fit_results[col]
@@ -186,11 +184,9 @@ if not data.empty and len(data.columns) > 1:
             )
             st.plotly_chart(fig, use_container_width=True)
 
-    # Show combined plot
     st.subheader("Combined Fit Plot")
     st.plotly_chart(combined_fig, use_container_width=True)
 
-    # Export ZIP file with data and plot
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, "w") as zip_file:
         summary_df = pd.DataFrame(st.session_state.summary_rows)
@@ -202,13 +198,12 @@ if not data.empty and len(data.columns) > 1:
             zip_file.writestr("calibration.csv", calib_df.to_csv(index=False))
         for sample, df in fit_results.items():
             zip_file.writestr(f"fits/{sample}.csv", df.to_csv(index=False))
-        # Save combined plot to PNG
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_img:
             try:
                 combined_fig.write_image(temp_img.name, format="png", scale=dpi/100)
-        except Exception as e:
-                            st.warning(f"Plot image could not be saved: {e}")
-                            temp_img.seek(0)
-                            zip_file.writestr("combined_plot.png", temp_img.read())
+                temp_img.seek(0)
+                zip_file.writestr("combined_plot.png", temp_img.read())
+            except Exception as e:
+                st.warning(f"Plot image could not be saved: {e}")
     zip_buffer.seek(0)
     st.download_button("📦 Download All Results as ZIP", data=zip_buffer.read(), file_name="tt_finder_results.zip", mime="application/zip")
