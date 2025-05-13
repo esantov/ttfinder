@@ -117,6 +117,28 @@ if not data.empty and len(data.columns) > 1:
     )
 ),
     xaxis=dict(
+        range=[0, 24],
+        type='linear',
+        tickmode='linear',
+        dtick=1,
+        tickformat=".2f",
+        color='black',
+        linecolor='black',
+        linewidth=2,
+        showgrid=False,
+        mirror=True
+    ),
+    yaxis=dict(
+        range=[0, 100],
+        tickformat=".2f",
+        color='black',
+        linecolor='black',
+        linewidth=2,
+        showgrid=False,
+        mirror=True
+    )
+),
+    xaxis=dict(
         type='linear',
         tickmode='linear',
         dtick=1,
