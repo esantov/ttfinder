@@ -188,3 +188,7 @@ if not data.empty and len(data.columns) > 1:
 
         except Exception as e:
             st.sidebar.error(f"Error fitting {col}: {e}")
+
+    # Show combined plot
+    st.subheader("Combined Fit Plot")
+    st.plotly_chart(combined_fig, use_container_width=True)
