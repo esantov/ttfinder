@@ -88,6 +88,24 @@ if not data.empty and len(data.columns) > 1:
     st.session_state.summary_rows.clear()
     fit_results = {}
     combined_fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='Data', marker=dict(color='black')))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name='Fit', line=dict(color='blue')))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(color='rgba(255,0,0,0.2)', width=0), showlegend=False))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name='95% CI', line=dict(color='rgba(255,0,0,0.2)', width=0))))
+            fig.add_hline(y=manual_thresh, line_dash="dash", line_color="green", annotation_text="Threshold", annotation_position="top right")
+            if tt_val:
+                fig.add_vline(x=tt_val, line_dash="dot", line_color="green", annotation_text="TT", annotation_position="bottom right")
+            fig.update_layout(
+                title=title,
+                margin=dict(l=40, r=40, t=60, b=40),
+                xaxis_title=x_label,
+                yaxis_title=y_label,
+                plot_bgcolor='white',
+                xaxis=dict(type='linear', tickmode='linear', dtick=1, tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True, range=[0, 24]),
+                yaxis=dict(range=[0, 100], tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True),
+                legend=dict(x=1.02, y=1, xanchor='left', yanchor='top', bordercolor='black', borderwidth=1)
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
     time_vals = data.iloc[:, 0].dropna().values
 
@@ -146,22 +164,7 @@ if not data.empty and len(data.columns) > 1:
                 title += f" | LogCFU/mL: {logcfu:.2f}"
 
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='Data', marker=dict(color='black')))
-            fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name='Fit'))
-            fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(width=0), showlegend=False))
-            fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name='95% CI', line=dict(width=0)))
-            fig.add_hline(y=manual_thresh, line_dash="dash", line_color="green", annotation_text="Threshold", annotation_position="top right")
-            fig.update_layout(
-                margin=dict(l=40, r=40, t=60, b=40),
-
-                title=title,
-                xaxis_title=x_label,
-                yaxis_title=y_label,
-                plot_bgcolor='white',
-                xaxis=dict(type='linear', tickmode='linear', dtick=1, tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True, range=[0, 24]),
-                yaxis=dict(range=[0, 100], tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True)
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            
 
             combined_fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name=f'{col} (TT={tt_val:.2f}, CFU={logcfu:.2f})'))
             combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(color='rgba(0,0,0,0.2)', width=0), showlegend=False))
@@ -181,24 +184,11 @@ if not data.empty and len(data.columns) > 1:
                 'CI Lower': y_ci[0],
                 'CI Upper': y_ci[1]
             })
-            fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='Data', marker=dict(color='black')))
-            fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name='Fit'))
-            fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(width=0), showlegend=False))
-            fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name='95% CI', line=dict(width=0)))
-            fig.add_hline(y=manual_thresh, line_dash="dash", line_color="green", annotation_text="Threshold", annotation_position="top right")
-            fig.update_layout(
-                title=title,
-                xaxis_title=x_label,
-                yaxis_title=y_label,
-                plot_bgcolor='white',
-                xaxis=dict(color='black', linecolor='black', showgrid=False),
-                yaxis=dict(color='black', linecolor='black', showgrid=False)
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            
 
             combined_fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name=f'{col} (TT={tt_val:.2f}, CFU={logcfu:.2f})'))
-            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(width=0), showlegend=False))
-            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name=f'{col} 95% CI', line=dict(width=0)))
+            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(color='rgba(0,0,0,0.2)', width=0), showlegend=False))
+            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name=f'{col} 95% CI', line=dict(color='rgba(0,0,0,0.2)', width=0)))
 
             st.session_state.summary_rows.append({
                 'Sample': col,
@@ -221,3 +211,24 @@ if not data.empty and len(data.columns) > 1:
     # Show combined plot
     st.subheader("Combined Fit Plot")
     st.plotly_chart(combined_fig, use_container_width=True)
+
+    # Export ZIP file with data and plot
+    import zipfile
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as zip_file:
+        summary_df = pd.DataFrame(st.session_state.summary_rows)
+        zip_file.writestr("summary.csv", summary_df.to_csv(index=False))
+        zip_file.writestr("original_data.csv", data.to_csv(index=False))
+        if 'calibration_coef' in st.session_state:
+            (a, b), _ = st.session_state['calibration_coef']
+            calib_df = pd.DataFrame({"Calibration Name": [calib_name], "Slope": [a], "Intercept": [b]})
+            zip_file.writestr("calibration.csv", calib_df.to_csv(index=False))
+        for sample, df in fit_results.items():
+            zip_file.writestr(f"fits/{sample}.csv", df.to_csv(index=False))
+        # Save combined plot to PNG
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_img:
+            combined_fig.write_image(temp_img.name, format="png", scale=dpi/100)
+            temp_img.seek(0)
+            zip_file.writestr("combined_plot.png", temp_img.read())
+    zip_buffer.seek(0)
+    st.download_button("📦 Download All Results as ZIP", data=zip_buffer.read(), file_name="tt_finder_results.zip", mime="application/zip")
