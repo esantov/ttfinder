@@ -12,7 +12,9 @@ import tempfile
 import os
 
 # SESSION STATE INIT
-for key in ['fits', 'ci', 'summary_rows', 'model_choices', 'calibration_coef']:
+if 'summary_rows' not in st.session_state:
+    st.session_state.summary_rows = []
+for key in ['fits', 'ci', 'model_choices', 'calibration_coef']:
     if key not in st.session_state:
         st.session_state[key] = {}
 
