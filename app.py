@@ -7,10 +7,9 @@ from sklearn.metrics import r2_score
 from scipy.stats import t
 from io import BytesIO
 import datetime
-import tempfile
 import zipfile
 
-# Define model functions
+# --- Model Functions ---
 def logistic_5pl(x, a, d, c, b, g):
     return d + (a - d) / (1 + (x / c) ** b) ** g
 
@@ -28,7 +27,7 @@ def inverse_threshold_curve(y, model_func, popt):
     except:
         return None
 
-# UI inputs
+# --- UI & Inputs ---
 st.title("📈 TT Finder - Curve Fitting Tool")
 x_label = st.text_input("X-axis label", "Time (h)")
 y_label = st.text_input("Y-axis label", "Signal")
@@ -43,7 +42,7 @@ if manual_calib:
     b = st.number_input("Intercept (b)", value=0.0)
     st.session_state['calibration_coef'] = ([a, b], None)
 
-# Data
+# Data Upload
 uploaded = st.file_uploader("Upload CSV", type="csv")
 if uploaded:
     data = pd.read_csv(uploaded)
@@ -51,13 +50,13 @@ if uploaded:
 else:
     data = pd.DataFrame({"Time": []})
 
-# Storage
+# Init
 if 'summary_rows' not in st.session_state:
     st.session_state['summary_rows'] = []
 
 fit_results = {}
 
-# Plotting functions
+# --- Plotting Functions ---
 def generate_sample_plot(sample, df, x_label, y_label, threshold, tt_val=None):
     fig, ax = plt.subplots(figsize=(6, 4))
     ax.plot(df['Time'], df['Raw'], 'o', label='Data', color='black')
@@ -72,7 +71,7 @@ def generate_sample_plot(sample, df, x_label, y_label, threshold, tt_val=None):
     ax.legend()
     plt.tight_layout()
     buf = BytesIO()
-    fig.savefig(buf, format="png", dpi=300)
+    fig.savefig(buf, format="png", dpi=dpi)
     buf.seek(0)
     plt.close(fig)
     return buf
@@ -89,7 +88,7 @@ def generate_combined_plot(fit_results_dict, threshold, x_label, y_label):
     ax.legend()
     plt.tight_layout()
     buf = BytesIO()
-    fig.savefig(buf, format="png", dpi=300)
+    fig.savefig(buf, format="png", dpi=dpi)
     buf.seek(0)
     plt.close(fig)
     return buf
@@ -108,7 +107,7 @@ def export_all_plots_zip(fit_results, summary_rows, x_label, y_label, threshold,
     zip_buffer.seek(0)
     return zip_buffer
 
-# Analysis
+# --- Analysis Loop ---
 if not data.empty and len(data.columns) > 1:
     time = data.iloc[:, 0].dropna().values
     for col in data.columns[1:]:
@@ -118,7 +117,6 @@ if not data.empty and len(data.columns) > 1:
         with st.expander(f"{col}"):
             model = st.selectbox("Model", ["5PL", "4PL", "Sigmoid", "Linear"], key=col)
 
-            # Select model function
             if model == "5PL":
                 func = logistic_5pl
                 p0 = [min(y), max(y), np.median(x), 1, 1]
@@ -160,16 +158,44 @@ if not data.empty and len(data.columns) > 1:
 
                 fit_df = pd.DataFrame({'Time': x, 'Raw': y, 'Fit': y_fit, 'CI Lower': y_ci[0], 'CI Upper': y_ci[1]})
                 fit_results[col] = fit_df
-                st.session_state.summary_rows.append({'Sample': col, 'Model': model, 'R²': round(r2, 3), 'Threshold Time': tt_val, 'Log CFU/mL': logcfu})
+                st.session_state.summary_rows.append({
+                    'Sample': col,
+                    'Model': model,
+                    'R²': round(r2, 3),
+                    'Threshold Time': tt_val,
+                    'Log CFU/mL': logcfu
+                })
 
                 img_buf = generate_sample_plot(col, fit_df, x_label, y_label, manual_thresh, tt_val)
-                st.image(img_buf, caption=f"{col} Fit", use_column_width=True)
+                st.image(img_buf, caption=f"{col} Fit", use_container_width=True)
 
             except Exception as e:
                 st.error(f"❌ Fitting failed for {col}: {e}")
 
+    # --- Final Export ---
     st.subheader("📦 Export All Plots")
     combined_buf = generate_combined_plot(fit_results, manual_thresh, x_label, y_label)
     zip_buf = export_all_plots_zip(fit_results, st.session_state.summary_rows, x_label, y_label, manual_thresh, combined_buf)
 
-    st.download_button("Download All Plots (ZIP)", data=zip_buf, file_name=f"tt_finder_plots_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.zip", mime="application/zip")
+    st.download_button(
+        "Download All Plots (ZIP)",
+        data=zip_buf,
+        file_name=f"tt_finder_plots_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+        mime="application/zip"
+    )
+if data is not None and summary_rows:
+    excel_buf = create_excel_report(
+        data=data,
+        fit_results=fit_results,
+        summary_rows=st.session_state['summary_rows'],
+        calibration=st.session_state.get('calibration_coef'),
+        x_label=x_label,
+        y_label=y_label
+    )
+
+    st.download_button(
+        label="📥 Download Excel Report",
+        data=excel_buf,
+        file_name=f"tt_finder_report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
