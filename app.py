@@ -95,7 +95,7 @@ if not data.empty and len(data.columns) > 1:
         y_vals = data[col].dropna().values
         x_vals = time_vals[:len(y_vals)]
 
-        with st.expander(f"{col}"):
+        with st.expander(f"{col} – TT: {{tt_val:.2f}} h, Log CFU/mL: {{logcfu:.2f}}" if 'tt_val' in locals() and tt_val is not None and logcfu is not None else f"{col}"):
             model_choice = st.selectbox("Choose model", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
             st.session_state.model_choices[col] = model_choice
 
@@ -177,19 +177,24 @@ if not data.empty and len(data.columns) > 1:
                 if tt_val is not None:
                     fig.add_vline(x=tt_val, line_dash="dot", line_color="orange", annotation_text="TT", annotation_position="bottom right")
                 fig.update_layout(title=f"{col} Fit", margin=dict(l=40, r=40, t=60, b=40),
+                                  xaxis_title=x_label,
+                                  yaxis_title=y_label,
                                   xaxis=dict(dtick=1, tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True),
                                   yaxis=dict(tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True),
                                   plot_bgcolor='white', legend=dict(x=1.02, y=1, xanchor='left', yanchor='top', bordercolor='black', borderwidth=1))
                 st.plotly_chart(fig, use_container_width=True)
                 with tempfile.NamedTemporaryFile(suffix=f".{fmt}", delete=False) as tmp:
-                    fig.write_image(tmp.name, format=fmt, scale=dpi/100)
-                    tmp.seek(0)
-                    st.download_button(
-                        label=f"📥 Download {col} Plot ({fmt.upper()})",
-                        data=tmp.read(),
-                        file_name=f"{col}_fit.{fmt}",
-                        mime=f"image/{'svg+xml' if fmt=='svg' else fmt}"
-                    )
+                    try:
+                        fig.write_image(tmp.name, format=fmt, scale=dpi/100)
+                        tmp.seek(0)
+                                                    label=f"📥 Download {col} Plot ({fmt.upper()})",
+                            data=tmp.read(),
+                            file_name=f"{col}_fit.{fmt}",
+                            mime=f"image/{{'svg+xml' if fmt=='svg' else fmt}}"
+                        )
+                    except Exception as e:
+                        st.warning(f"⚠️ Could not export plot for {col}. Please ensure Kaleido is installed.
+To install it, run:`pip install -U kaleido`")
 
                 if tt_val is not None:
                     st.markdown(f"**Threshold Time (TT):** {tt_val:.2f} h")
@@ -199,6 +204,10 @@ if not data.empty and len(data.columns) > 1:
                 st.sidebar.error(f"Error fitting {col}: {e}")
 
     st.subheader("Combined Fit Plot")
+    combined_fig.update_layout(
+        xaxis_title=x_label,
+        yaxis_title=y_label
+    )
     st.plotly_chart(combined_fig, use_container_width=True)
 
     
