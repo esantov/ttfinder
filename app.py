@@ -195,8 +195,6 @@ if not data.empty and len(data.columns) > 1:
                         )
                         
                     except Exception as e:
-                        st.warning(f"⚠️ Could not export plot for {col}. Please ensure Kaleido is installed.
-To install it, run:`pip install -U kaleido`")
 
                 if tt_val is not None:
                     st.markdown(f"**Threshold Time (TT):** {tt_val:.2f} h")
