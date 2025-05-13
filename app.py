@@ -73,7 +73,10 @@ st.markdown("### Data Input")
 uploaded_data = st.file_uploader("Upload CSV (first column = Time)", type=["csv"])
 if uploaded_data:
     data = pd.read_csv(uploaded_data)
-    st.success("Data loaded from uploaded file.")
+    st.success("✅ Data loaded from uploaded file.")
+    st.dataframe(data.head())
+    if len(data.columns) <= 1:
+        st.warning("⚠️ Please upload a CSV with at least two columns (Time + Samples).")
 else:
     data = st.data_editor(pd.DataFrame({"Time": []}), num_rows="dynamic", use_container_width=True)
 
