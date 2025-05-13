@@ -1,9 +1,8 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, root_scalar
 from sklearn.metrics import r2_score
 from scipy.stats import t
 from io import BytesIO
@@ -21,14 +20,13 @@ def sigmoid(x, L, x0, k):
     return L / (1 + np.exp(-k * (x - x0)))
 
 def inverse_threshold_curve(y, model_func, popt):
-    from scipy.optimize import root_scalar
     try:
         result = root_scalar(lambda t: model_func(t, *popt) - y, bracket=[0, 1e3], method='brentq')
         return result.root if result.converged else None
     except:
         return None
 
-# --- Plotting & Export Functions ---
+# --- Plotting ---
 def generate_sample_plot(sample, df, x_label, y_label, threshold, tt_val=None, logcfu=None):
     fig, ax = plt.subplots(figsize=(6, 4))
     ax.plot(df['Time'], df['Raw'], 'o', label='Data', color='black')
@@ -51,12 +49,6 @@ def generate_sample_plot(sample, df, x_label, y_label, threshold, tt_val=None, l
     plt.close(fig)
     return buf
 
-# --- Summary Table: TT and Log CFU/mL ---
-if st.session_state.get("summary_rows"):
-    summary_df = pd.DataFrame(st.session_state["summary_rows"])[["Sample", "Threshold Time", "Log CFU/mL"]]
-    st.markdown("### 🧾 TT and Log CFU/mL Summary")
-    st.dataframe(summary_df, use_container_width=True)
-
 def generate_combined_plot(fit_results_dict, threshold, x_label, y_label, summary_rows):
     fig, ax = plt.subplots(figsize=(10, 6))
     for row in summary_rows:
@@ -64,9 +56,7 @@ def generate_combined_plot(fit_results_dict, threshold, x_label, y_label, summar
         df = fit_results_dict[sample]
         tt = row.get('Threshold Time')
         logcfu = row.get('Log CFU/mL')
-        tt_str = f"{tt:.2f}" if tt is not None else "N/A"
-        logcfu_str = f"{logcfu:.2f}" if logcfu is not None else "N/A"
-        label = f"{sample} (TT={tt_str}, CFU={logcfu_str})"
+        label = f"{sample} (TT={tt:.2f}, CFU={logcfu:.2f})" if tt and logcfu else sample
         ax.plot(df['Time'], df['Fit'], label=label)
         ax.fill_between(df['Time'], df['CI Lower'], df['CI Upper'], alpha=0.3)
     ax.axhline(y=threshold, color='green', linestyle='--', label='Threshold')
@@ -81,59 +71,6 @@ def generate_combined_plot(fit_results_dict, threshold, x_label, y_label, summar
     plt.close(fig)
     return buf
 
-
-def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y_label):
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        if not data.empty:
-            data.to_excel(writer, sheet_name="Original Data", index=False)
-        if calibration:
-            (a, b), _ = calibration
-            pd.DataFrame({"Calibration Name": ["Manual"], "Slope": [a], "Intercept": [b]}).to_excel(writer, sheet_name="Calibration", index=False)
-        if summary_rows:
-            pd.DataFrame(summary_rows).to_excel(writer, sheet_name="Summary", index=False)
-
-        # Add parameters with formulas
-        param_rows = []
-        formula_map = {
-            '5PL': "y = d + (a - d) / (1 + (x / c)^b)^g",
-            '4PL': "y = d + (a - d) / (1 + (x / c)^b)",
-            'Sigmoid': "y = L / (1 + exp(-k*(x - x0)))",
-            'Linear': "y = a*x + b"
-        }
-        inverse_map = {
-            '5PL': "x = c * (((a - d)/(y - d))^(1/g) - 1)^(1/b)",
-            '4PL': "x = c * ((a - d)/(y - d) - 1)^(1/b)",
-            'Sigmoid': "x = x0 - log((L/y) - 1)/k",
-            'Linear': "x = (y - b) / a"
-        }
-
-        for row in summary_rows:
-            model = row['Model']
-            params = fit_results.get(row['Sample'])
-            param_vals = params.get('Fit') if params is not None else []
-            if isinstance(param_vals, (list, tuple, np.ndarray)):
-                values = list(param_vals)
-            else:
-                values = []
-            entry = {
-                "Sample": row['Sample'],
-                "Model": model,
-                "Formula": formula_map.get(model, ""),
-                "Inverse": inverse_map.get(model, "")
-            }
-            for i, v in enumerate(values):
-                entry[f"p{i+1}"] = round(v, 4)
-            param_rows.append(entry)
-
-        pd.DataFrame(param_rows).to_excel(writer, sheet_name="Fit Parameters", index=False)
-
-        for sample, df in fit_results.items():
-            df.to_excel(writer, sheet_name=sample[:31], index=False)
-
-    output.seek(0)
-    return output
-
 def export_all_plots_zip(fit_results, summary_rows, x_label, y_label, threshold, combined_img_buf):
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, "w") as zip_file:
@@ -147,6 +84,34 @@ def export_all_plots_zip(fit_results, summary_rows, x_label, y_label, threshold,
         zip_file.writestr("combined_fit.png", combined_img_buf.read())
     zip_buffer.seek(0)
     return zip_buffer
+
+def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y_label):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        if not data.empty:
+            data.to_excel(writer, sheet_name="Original Data", index=False)
+        if calibration:
+            (a, b), _ = calibration
+            pd.DataFrame({"Calibration Name": ["Manual"], "Slope": [a], "Intercept": [b]}).to_excel(writer, sheet_name="Calibration", index=False)
+        if summary_rows:
+            pd.DataFrame(summary_rows).to_excel(writer, sheet_name="Summary", index=False)
+
+        # Add formulas
+        param_rows = []
+        for row in summary_rows:
+            entry = {
+                "Sample": row['Sample'],
+                "Model": row['Model'],
+                "TT": row.get("Threshold Time"),
+                "Log CFU/mL": row.get("Log CFU/mL")
+            }
+            param_rows.append(entry)
+        pd.DataFrame(param_rows).to_excel(writer, sheet_name="Fit Parameters", index=False)
+
+        for sample, df in fit_results.items():
+            df.to_excel(writer, sheet_name=sample[:31], index=False)
+    output.seek(0)
+    return output
 
 # --- UI ---
 st.title("📈 TT Finder - Curve Fitting Tool")
@@ -163,7 +128,7 @@ if manual_calib:
     b = st.number_input("Intercept (b)", value=0.0)
     st.session_state['calibration_coef'] = ([a, b], None)
 
-# Data Upload
+# Upload data
 uploaded = st.file_uploader("Upload CSV", type="csv")
 if uploaded:
     data = pd.read_csv(uploaded)
@@ -177,9 +142,9 @@ if 'summary_rows' not in st.session_state:
 
 fit_results = {}
 
-
-# --- Analysis Logic ---
+# --- Fitting ---
 if not data.empty and len(data.columns) > 1:
+    st.session_state['summary_rows'] = []
     time = data.iloc[:, 0].dropna().values
     for col in data.columns[1:]:
         y = data[col].dropna().values
@@ -225,7 +190,7 @@ if not data.empty and len(data.columns) > 1:
 
                 fit_df = pd.DataFrame({'Time': x, 'Raw': y, 'Fit': y_fit, 'CI Lower': y_ci[0], 'CI Upper': y_ci[1]})
                 fit_results[col] = fit_df
-                st.session_state.summary_rows.append({
+                st.session_state['summary_rows'].append({
                     'Sample': col,
                     'Model': model,
                     'R²': round(r2, 3),
@@ -239,85 +204,29 @@ if not data.empty and len(data.columns) > 1:
             except Exception as e:
                 st.error(f"❌ Fitting failed for {col}: {e}")
 
-    combined_buf = generate_combined_plot(fit_results, manual_thresh, x_label, y_label, st.session_state['summary_rows'])
-# Patch the function with safe CI estimation logic for TT values
-def test_fit_4pl_on_user_data_safe(data, manual_thresh=25.0):
-    def logistic_4pl(x, a, d, c, b):
-        return d + (a - d) / (1 + (x / c) ** b)
+    # --- Summary + Downloads ---
+    if st.session_state.get("summary_rows"):
+        summary_df = pd.DataFrame(st.session_state["summary_rows"])
+        st.markdown("### 🧾 TT and Log CFU/mL Summary")
+        st.dataframe(summary_df[["Sample", "Threshold Time", "Log CFU/mL"]], use_container_width=True)
 
-    summary_rows = []
-    fit_results = {}
-    time = data.iloc[:, 0].dropna().values
+        combined_buf = generate_combined_plot(fit_results, manual_thresh, x_label, y_label, st.session_state["summary_rows"])
 
-    for col in data.columns[1:]:
-        y = data[col].dropna().values
-        x = time[:len(y)]
-        p0 = [min(y), max(y), np.median(x), 1]
+        st.download_button(
+            "📦 Download All Plots (ZIP)",
+            data=export_all_plots_zip(fit_results, st.session_state["summary_rows"], x_label, y_label, manual_thresh, combined_buf),
+            file_name=f"tt_finder_plots_{datetime.datetime.now():%Y%m%d_%H%M%S}.zip",
+            mime="application/zip"
+        )
 
-        try:
-            popt, pcov = curve_fit(logistic_4pl, x, y, p0=p0, maxfev=10000)
-            y_fit = logistic_4pl(x, *popt)
-            r2 = r2_score(y, y_fit)
+        excel_buf = create_excel_report(
+            data, fit_results, st.session_state["summary_rows"],
+            st.session_state.get('calibration_coef'), x_label, y_label
+        )
 
-            tt_val = inverse_threshold_curve(manual_thresh, logistic_4pl, popt)
-            tt_ci_low = tt_ci_high = tt_stderr = None
-            if tt_val is not None and pcov.shape[0] == pcov.shape[1] == len(popt):
-                try:
-                    grad_tt = np.array([
-                        (inverse_threshold_curve(manual_thresh + 1e-5, logistic_4pl, popt) -
-                         inverse_threshold_curve(manual_thresh, logistic_4pl, popt)) / 1e-5
-                    ])
-                    if grad_tt.shape[0] == pcov.shape[0]:
-                        tt_stderr = np.sqrt(grad_tt @ pcov @ grad_tt.T)
-                        tval = t.ppf(0.975, len(x) - len(popt))
-                        delta = tval * tt_stderr
-                        tt_ci_low = tt_val - delta
-                        tt_ci_high = tt_val + delta
-                except Exception as inner_err:
-                    pass
-
-            summary_rows.append({
-                'Sample': col,
-                'Model': "4PL",
-                'R²': round(r2, 3),
-                'Threshold Time': tt_val,
-                'TT CI Lower': tt_ci_low,
-                'TT CI Upper': tt_ci_high,
-                'TT StdErr': tt_stderr[0] if isinstance(tt_stderr, np.ndarray) else None
-            })
-        except Exception as e:
-            summary_rows.append({
-                'Sample': col,
-                'Model': "4PL",
-                'R²': None,
-                'Threshold Time': None,
-                'TT CI Lower': None,
-                'TT CI Upper': None,
-                'TT StdErr': None,
-                'Error': str(e)
-            })
-
-    return pd.DataFrame(summary_rows)
-
-# Run the test safely
-test_summary_safe_df = test_fit_4pl_on_user_data_safe(user_data, manual_thresh=25.0)
-import ace_tools as tools; tools.display_dataframe_to_user(name="TT Finder Summary (Safe 4PL, Threshold = 25)", dataframe=test_summary_safe_df)
-st.download_button(
-        "📦 Download All Plots (ZIP)",
-        data=export_all_plots_zip(fit_results, st.session_state['summary_rows'], x_label, y_label, manual_thresh, combined_buf),
-        file_name=f"tt_finder_plots_{datetime.datetime.now():%Y%m%d_%H%M%S}.zip",
-        mime="application/zip"
-    )
-
-excel_buf = create_excel_report(
-        data, fit_results, st.session_state['summary_rows'],
-        st.session_state.get('calibration_coef'),
-        x_label, y_label
-    )
-
-st.download_button(
-        "📥 Download Excel Report",
-        data=excel_buf,
-        file_name=f"tt_finder_report_{datetime.datetime.now():%Y%m%d_%H%M%S}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+        st.download_button(
+            "📥 Download Excel Report",
+            data=excel_buf,
+            file_name=f"tt_finder_report_{datetime.datetime.now():%Y%m%d_%H%M%S}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
