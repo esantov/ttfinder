@@ -142,8 +142,10 @@ if not data.empty and len(data.columns) > 1:
                     logcfu = a * tt_val + b
 
                 combined_fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name=f'{col} (TT={tt_val:.2f}, CFU={logcfu:.2f})'))
-                combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(color='rgba(0,0,0,0.2)', width=0), showlegend=False))
-                combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name=f'{col} 95% CI', line=dict(color='rgba(0,0,0,0.2)', width=0)))
+                fit_color = f'rgba({np.random.randint(0,256)},{np.random.randint(0,256)},{np.random.randint(0,256)},1)'
+                ci_color = fit_color.replace(',1)', ',0.3)')
+                combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(color=ci_color, width=0), showlegend=False))
+                combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name=f'{col} 95% CI', line=dict(color=ci_color, width=0)))
 
                 st.session_state.model_params = st.session_state.get('model_params', {})
                 st.session_state.model_params[col] = popt if 'popt' in locals() else []
@@ -176,6 +178,15 @@ if not data.empty and len(data.columns) > 1:
                                   yaxis=dict(tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True),
                                   plot_bgcolor='white', legend=dict(x=1.02, y=1, xanchor='left', yanchor='top', bordercolor='black', borderwidth=1))
                 st.plotly_chart(fig, use_container_width=True)
+                with tempfile.NamedTemporaryFile(suffix=f".{fmt}", delete=False) as tmp:
+                    fig.write_image(tmp.name, format=fmt, scale=dpi/100)
+                    tmp.seek(0)
+                    st.download_button(
+                        label=f"📥 Download {col} Plot ({fmt.upper()})",
+                        data=tmp.read(),
+                        file_name=f"{col}_fit.{fmt}",
+                        mime=f"image/{'svg+xml' if fmt=='svg' else fmt}"
+                    )
 
                 if tt_val is not None:
                     st.markdown(f"**Threshold Time (TT):** {tt_val:.2f} h")
@@ -187,41 +198,11 @@ if not data.empty and len(data.columns) > 1:
     st.subheader("Combined Fit Plot")
     st.plotly_chart(combined_fig, use_container_width=True)
 
-    zip_buffer = BytesIO()
-    with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as temp_excel:
-        with pd.ExcelWriter(temp_excel.name, engine='xlsxwriter') as writer:
-            pd.DataFrame(st.session_state.summary_rows).to_excel(writer, sheet_name='Summary', index=False)
-            for sample, df in fit_results.items():
-                df.to_excel(writer, sheet_name=sample[:31], index=False)
-            if 'calibration_coef' in st.session_state:
-                (a, b), _ = st.session_state['calibration_coef']
-                calib_df = pd.DataFrame({"Calibration Name": [calib_name], "Slope": [a], "Intercept": [b]})
-                calib_df.to_excel(writer, sheet_name='Calibration', index=False)
-            param_rows = []
-            formula_map = {
-                '5PL': "y = d + (a - d) / (1 + (x / c)^b)^g",
-                '4PL': "y = d + (a - d) / (1 + (x / c)^b)",
-                'Sigmoid': "y = L / (1 + exp(-k*(x - x0)))",
-                'Linear': "y = a*x + b"
-            }
-            inverse_map = {
-                '5PL': "x = c * (((a - d)/(y - d))^(1/g) - 1)^(1/b)",
-                '4PL': "x = c * ((a - d)/(y - d) - 1)^(1/b)",
-                'Sigmoid': "x = x0 - log((L/y) - 1)/k",
-                'Linear': "x = (y - b) / a"
-            }
-            for row in st.session_state.summary_rows:
-                model = row['Model']
-                params = st.session_state.get('model_params', {}).get(row['Sample'], [])
-                param_rows.append({
-                    'Sample': row['Sample'],
-                    'Model': model,
-                    'Curve Formula': formula_map.get(model, ""),
-                    'Inverse Formula': inverse_map.get(model, ""),
-                    'Parameters': ', '.join([f'{v:.4f}' for v in params]) if isinstance(params, (list, tuple, np.ndarray)) else f'{params:.4f}' if params is not None else 'N/A'
-                })
-            pd.DataFrame(param_rows).to_excel(writer, sheet_name='Fit Parameters', index=False)
-            data.to_excel(writer, sheet_name='Original Data', index=False)
-        temp_excel.seek(0)
-        st.download_button("📥 Download Excel Report", data=temp_excel.read(), file_name="tt_finder_report.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    st.download_button("📦 Download All Results as ZIP", data=zip_buffer.read(), file_name="tt_finder_results.zip", mime="application/zip")
+    # Generate a shareable filename with timestamp
+    if st.button("🔗 Generate Shareable Report Link"):
+        share_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        st.session_state['share_id'] = share_id
+        st.success(f"🔗 Share ID created: `{share_id}`")
+        st.markdown(f"This ID is used in the report name: `tt_report_{share_id}.xlsx`")
+
+    
