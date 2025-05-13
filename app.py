@@ -89,11 +89,53 @@ if not data.empty and len(data.columns) > 1:
     fit_results = {}
     combined_fig = go.Figure()
     combined_fig.update_layout(
-        title="Combined Model Fits",
-        xaxis_title=x_label,
-        yaxis_title=y_label,
-        plot_bgcolor='white',
-        xaxis=dict(color='black', linecolor='black', showgrid=False),
+    title="Combined Model Fits",
+    xaxis_title=x_label,
+    yaxis_title=y_label,
+    plot_bgcolor='white',
+    margin=dict(l=40, r=40, t=60, b=40),
+    xaxis=dict(
+        range=[0, 24],
+        type='linear',
+        tickmode='linear',
+        dtick=1,
+        tickformat=".2f",
+        color='black',
+        linecolor='black',
+        linewidth=2,
+        showgrid=False,
+        mirror=True
+    ),
+    yaxis=dict(
+        range=[0, 100],
+        tickformat=".2f",
+        color='black',
+        linecolor='black',
+        linewidth=2,
+        showgrid=False,
+        mirror=True
+    )
+),
+    xaxis=dict(
+        type='linear',
+        tickmode='linear',
+        dtick=1,
+        tickformat=".2f",
+        color='black',
+        linecolor='black',
+        linewidth=2,
+        showgrid=False,
+        mirror=True
+    ),
+    yaxis=dict(
+        tickformat=".2f",
+        color='black',
+        linecolor='black',
+        linewidth=2,
+        showgrid=False,
+        mirror=True
+    )
+),
         yaxis=dict(color='black', linecolor='black', showgrid=False)
     )
 
