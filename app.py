@@ -129,6 +129,19 @@ def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y
     output.seek(0)
     return output
 
+def export_all_plots_zip(fit_results, summary_rows, x_label, y_label, threshold, combined_img_buf):
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as zip_file:
+        for row in summary_rows:
+            sample = row['Sample']
+            model = row['Model']
+            tt_val = row.get('Threshold Time')
+            df = fit_results[sample]
+            img = generate_sample_plot(sample, df, x_label, y_label, threshold, tt_val)
+            zip_file.writestr(f"{sample}_{model}_fit.png", img.read())
+        zip_file.writestr("combined_fit.png", combined_img_buf.read())
+    zip_buffer.seek(0)
+    return zip_buffer
 
 # --- UI ---
 st.title("📈 TT Finder - Curve Fitting Tool")
