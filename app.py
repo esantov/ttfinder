@@ -30,7 +30,7 @@ def sigmoid(x, L, x0, k):
     return L / (1 + np.exp(-k * (x - x0)))
 
 def inverse_threshold_curve(y, model_func, popt):
-                try:
+    try:
         from scipy.optimize import root_scalar
         result = root_scalar(lambda t: model_func(t, *popt) - y, bracket=[0, 1e3], method='brentq')
         return result.root if result.converged else None
