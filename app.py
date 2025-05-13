@@ -30,7 +30,7 @@ def sigmoid(x, L, x0, k):
     return L / (1 + np.exp(-k * (x - x0)))
 
 def inverse_threshold_curve(y, model_func, popt):
-    try:
+                try:
         from scipy.optimize import root_scalar
         result = root_scalar(lambda t: model_func(t, *popt) - y, bracket=[0, 1e3], method='brentq')
         return result.root if result.converged else None
@@ -95,20 +95,20 @@ if not data.empty and len(data.columns) > 1:
         y_vals = data[col].dropna().values
         x_vals = time_vals[:len(y_vals)]
 
-        with st.expander(f"{col}"):
-        model_choice = st.selectbox("Choose model", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
-        st.session_state.model_choices[col] = model_choice
+                with st.expander(f"{col}"):
+                    model_choice = st.selectbox("Choose model", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
+                    st.session_state.model_choices[col] = model_choice
         x_vals = time_vals[:len(y_vals)]
         
 
-        model_func, p0 = None, None
-        if model_choice == "5PL":
+                    model_func, p0 = None, None
+                    if model_choice == "5PL":
             model_func = logistic_5pl
             p0 = [min(y_vals), max(y_vals), np.median(x_vals), 1, 1]
-        elif model_choice == "4PL":
+                    elif model_choice == "4PL":
             model_func = logistic_4pl
             p0 = [min(y_vals), max(y_vals), np.median(x_vals), 1]
-        elif model_choice == "Sigmoid":
+                    elif model_choice == "Sigmoid":
             model_func = sigmoid
             p0 = [max(y_vals), np.median(x_vals), 1]
 
@@ -165,17 +165,17 @@ if not data.empty and len(data.columns) > 1:
                 'CI Upper': y_ci[1]
             })
 
-        except Exception as e:
+                    except Exception as e:
             st.sidebar.error(f"Error fitting {col}: {e}")
 
-        if 'y_fit' in locals():
+                    if 'y_fit' in locals():
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='Data', marker=dict(color='black')))
             fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name='Fit', line=dict(color='blue')))
             fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(color='rgba(255,0,0,0.2)', width=0), showlegend=False))
             fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name='95% CI', line=dict(color='rgba(255,0,0,0.2)', width=0)))
             fig.add_hline(y=manual_thresh, line_dash="dash", line_color="green", annotation_text="Threshold", annotation_position="top right")
-            if tt_val is not None:
+                        if tt_val is not None:
                 fig.add_vline(x=tt_val, line_dash="dot", line_color="green", annotation_text="TT", annotation_position="bottom right")
             fig.update_layout(title=f"{col} Fit", margin=dict(l=40, r=40, t=60, b=40),
                               xaxis=dict(dtick=1, tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True),
@@ -184,7 +184,7 @@ if not data.empty and len(data.columns) > 1:
             st.plotly_chart(fig, use_container_width=True)
         if tt_val is not None:
             st.markdown(f"**Threshold Time (TT):** {tt_val:.2f} h")
-        if logcfu is not None:
+                    if logcfu is not None:
             st.markdown(f"**Log CFU/mL:** {logcfu:.2f}")
 
     st.subheader("Combined Fit Plot")
