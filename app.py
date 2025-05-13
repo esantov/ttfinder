@@ -88,6 +88,7 @@ else:
 
 st.session_state.summary_rows.clear()
 fit_results = {}
+combined_fig = go.Figure()
 
 if not data.empty:
     time_vals = data.iloc[:, 0].dropna().values
@@ -148,9 +149,18 @@ if not data.empty:
                     delta_logcfu = tval_calib * se_pred
                     logcfu_ci = (logcfu - delta_logcfu, logcfu + delta_logcfu)
 
-                st.markdown(f"**Threshold Time (TT):** {thresh_time:.3f}" if thresh_time else "TT: N/A")
-                if logcfu is not None:
-                    st.markdown(f"**Log CFU/mL:** {logcfu:.3f} (95% CI: {logcfu_ci[0]:.3f} – {logcfu_ci[1]:.3f})")
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='Raw Data'))
+                fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name=f'{model_choice} Fit'))
+                fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(width=0), showlegend=False))
+                fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name='95% CI', line=dict(width=0)))
+                fig.add_hline(y=manual_thresh, line_dash="dash", line_color="green")
+                fig.update_layout(title=f"{col} – {model_choice} Fit\nTT: {thresh_time:.2f} | LogCFU/mL: {logcfu:.2f}" if thresh_time and logcfu else f"{col} – {model_choice} Fit", xaxis_title=x_label, yaxis_title=y_label)
+                st.plotly_chart(fig, use_container_width=True)
+
+                combined_fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name=f'{col} Fit'))
+                combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(width=0), showlegend=False))
+                combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name=f'{col} 95% CI', line=dict(width=0)))
 
                 st.session_state.summary_rows.append({
                     'Sample': col,
@@ -178,6 +188,11 @@ if not data.empty:
     if not summary_df.empty:
         st.dataframe(summary_df)
 
+        # Cumulative Plot
+        st.subheader("Combined Fit Plot")
+        combined_fig.update_layout(title="Combined Model Fits", xaxis_title=x_label, yaxis_title=y_label)
+        st.plotly_chart(combined_fig, use_container_width=True)
+
         # Excel export
         excel_buffer = BytesIO()
         with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
@@ -197,6 +212,8 @@ if not data.empty:
                 calib_df.to_excel(writer, index=False, sheet_name="Calibration")
             for name, df in fit_results.items():
                 df.to_excel(writer, index=False, sheet_name=name[:31])
+            combined_data = pd.concat(fit_results.values(), keys=fit_results.keys()).reset_index()
+            combined_data.to_excel(writer, index=False, sheet_name="Combined Fits")
         excel_buffer.seek(0)
         st.download_button("Download All Results (Excel)", data=excel_buffer.read(), file_name="tt_finder_results.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
