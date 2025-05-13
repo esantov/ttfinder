@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 import xlsxwriter
 import tempfile
 import os
+import zipfile
 
 # SESSION STATE INIT
 if 'summary_rows' not in st.session_state:
@@ -88,24 +89,6 @@ if not data.empty and len(data.columns) > 1:
     st.session_state.summary_rows.clear()
     fit_results = {}
     combined_fig = go.Figure()
-    fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='Data', marker=dict(color='black')))
-    fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name='Fit', line=dict(color='blue')))
-    fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(color='rgba(255,0,0,0.2)', width=0), showlegend=False))
-    fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name='95% CI', line=dict(color='rgba(255,0,0,0.2)', width=0)))
-    fig.add_hline(y=manual_thresh, line_dash="dash", line_color="green", annotation_text="Threshold", annotation_position="top right")
-    if tt_val:
-                fig.add_vline(x=tt_val, line_dash="dot", line_color="green", annotation_text="TT", annotation_position="bottom right")
-            fig.update_layout(
-                title=title,
-                margin=dict(l=40, r=40, t=60, b=40),
-                xaxis_title=x_label,
-                yaxis_title=y_label,
-                plot_bgcolor='white',
-                xaxis=dict(type='linear', tickmode='linear', dtick=1, tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True, range=[0, 24]),
-                yaxis=dict(range=[0, 100], tickformat=".2f", color='black', linecolor='black', linewidth=2, showgrid=False, mirror=True),
-                legend=dict(x=1.02, y=1, xanchor='left', yanchor='top', bordercolor='black', borderwidth=1)
-            )
-            st.plotly_chart(fig, use_container_width=True)
 
     time_vals = data.iloc[:, 0].dropna().values
 
@@ -157,35 +140,6 @@ if not data.empty and len(data.columns) > 1:
                 (a, b), cov = st.session_state.calibration_coef
                 logcfu = a * tt_val + b
 
-            title = f"{col} – {model_choice} Fit"
-            if tt_val is not None:
-                title += f" | TT: {tt_val:.2f}"
-            if logcfu is not None:
-                title += f" | LogCFU/mL: {logcfu:.2f}"
-
-            fig = go.Figure()
-            
-
-            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name=f'{col} (TT={tt_val:.2f}, CFU={logcfu:.2f})'))
-            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(color='rgba(0,0,0,0.2)', width=0), showlegend=False))
-            combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name=f'{col} 95% CI', line=dict(color='rgba(0,0,0,0.2)', width=0)))
-
-            st.session_state.summary_rows.append({
-                'Sample': col,
-                'Model': model_choice,
-                'R²': round(r2, 4),
-                'Threshold Time': tt_val,
-                'Log CFU/mL': logcfu
-            })
-
-            fit_results[col] = pd.DataFrame({
-                'Time': x_vals,
-                'Fit': y_fit,
-                'CI Lower': y_ci[0],
-                'CI Upper': y_ci[1]
-            })
-            
-
             combined_fig.add_trace(go.Scatter(x=x_vals, y=y_fit, mode='lines', name=f'{col} (TT={tt_val:.2f}, CFU={logcfu:.2f})'))
             combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[0], fill=None, mode='lines', line=dict(color='rgba(0,0,0,0.2)', width=0), showlegend=False))
             combined_fig.add_trace(go.Scatter(x=x_vals, y=y_ci[1], fill='tonexty', mode='lines', name=f'{col} 95% CI', line=dict(color='rgba(0,0,0,0.2)', width=0)))
@@ -213,7 +167,6 @@ if not data.empty and len(data.columns) > 1:
     st.plotly_chart(combined_fig, use_container_width=True)
 
     # Export ZIP file with data and plot
-    import zipfile
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, "w") as zip_file:
         summary_df = pd.DataFrame(st.session_state.summary_rows)
