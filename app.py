@@ -96,8 +96,6 @@ if not data.empty and len(data.columns) > 1:
         x_vals = time_vals[:len(y_vals)]
 
         with st.expander(f"{col}"):
-
-
         model_choice = st.selectbox("Choose model", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
         st.session_state.model_choices[col] = model_choice
         x_vals = time_vals[:len(y_vals)]
