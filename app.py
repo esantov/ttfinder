@@ -315,7 +315,7 @@ excel_buf = create_excel_report(
         x_label, y_label
     )
 
-    st.download_button(
+st.download_button(
         "📥 Download Excel Report",
         data=excel_buf,
         file_name=f"tt_finder_report_{datetime.datetime.now():%Y%m%d_%H%M%S}.xlsx",
