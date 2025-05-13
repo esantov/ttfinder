@@ -92,9 +92,9 @@ if not data.empty and len(data.columns) > 1:
     time_vals = data.iloc[:, 0].dropna().values
 
     for col in data.columns[1:]:
-    model_choice = st.selectbox(f"Choose model for {col}", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
-    st.session_state.model_choices[col] = model_choice
-    y_vals = data[col].dropna().values
+        model_choice = st.selectbox(f"Choose model for {col}", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
+        st.session_state.model_choices[col] = model_choice
+        y_vals = data[col].dropna().values
         x_vals = time_vals[:len(y_vals)]
         
 
