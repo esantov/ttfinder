@@ -41,25 +41,37 @@ dpi = st.slider("DPI", 100, 600, 300, 50)
 
 # Calibration input (optional)
 st.markdown("### Calibration")
-cal_df = st.file_uploader("Upload calibration CSV (TT, logCFU/mL)", type="csv", key="calib")
-if cal_df:
-    calib_data = pd.read_csv(cal_df)
-    if calib_data.shape[1] >= 2:
-        tt = calib_data.iloc[:, 0]
-        logcfu = calib_data.iloc[:, 1]
-        coef, cov = np.polyfit(tt, logcfu, 1, cov=True)
-        st.session_state.calibration_coef = (coef, cov)
-        st.success(f"Calibration model: logCFU/mL = {coef[0]:.4f}*TT + {coef[1]:.4f}")
+calib_name = st.text_input("Calibration name", value="Default Calibration")
+cal_slope = st.number_input("Calibration slope (a)", value=0.0)
+cal_intercept = st.number_input("Calibration intercept (b)", value=0.0)
 
-uploaded = st.file_uploader("Upload CSV (first col = time)", type=["csv"])
-if uploaded:
-    data = pd.read_csv(uploaded)
+manual_calib = st.checkbox("Use manual calibration", value=False)
+
+if manual_calib:
+    coef = [cal_slope, cal_intercept]
+    cov = np.array([[0.01, 0.0], [0.0, 0.01]])  # dummy covariance
+    st.session_state.calibration_coef = (coef, cov)
+    st.success(f"Manual calibration model: logCFU/mL = {coef[0]:.4f}*TT + {coef[1]:.4f}")
 else:
-    st.stop()
+    cal_df = st.file_uploader("Upload calibration CSV (TT, logCFU/mL)", type="csv", key="calib")
+    if cal_df:
+        calib_data = pd.read_csv(cal_df)
+        if calib_data.shape[1] >= 2:
+            tt = calib_data.iloc[:, 0]
+            logcfu = calib_data.iloc[:, 1]
+            coef, cov = np.polyfit(tt, logcfu, 1, cov=True)
+            st.session_state.calibration_coef = (coef, cov)
+            st.success(f"Calibration model: logCFU/mL = {coef[0]:.4f}*TT + {coef[1]:.4f}")
+
+# Data input
+st.markdown("### Data Input")
+example_data = pd.DataFrame({"Time": np.arange(0, 4.25, 0.25), "Sample1": np.linspace(2, 20, 18), "Sample2": np.linspace(3, 25, 18)})
+data = st.data_editor(example_data, num_rows="dynamic", use_container_width=True)
 
 st.session_state.summary_rows.clear()
 
-if st.button("Run Analysis"):
+# Begin analysis immediately on data change
+if not data.empty:
     time_vals = data.iloc[:, 0].dropna().values
     st.sidebar.markdown("### Fit Errors")
 
@@ -131,7 +143,7 @@ if st.button("Run Analysis"):
                     se_pred = np.sqrt(
                         cov[0,0]*thresh_time**2 + cov[1,1] + 2*thresh_time*cov[0,1]
                     )
-                    tval_calib = t.ppf(0.975, len(calib_data)-2)
+                    tval_calib = t.ppf(0.975, 10)  # df estimate
                     delta_logcfu = tval_calib * se_pred
                     logcfu_ci = (logcfu - delta_logcfu, logcfu + delta_logcfu)
 
