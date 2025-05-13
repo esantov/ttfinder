@@ -92,7 +92,9 @@ if not data.empty and len(data.columns) > 1:
     time_vals = data.iloc[:, 0].dropna().values
 
     for col in data.columns[1:]:
-        y_vals = data[col].dropna().values
+    model_choice = st.selectbox(f"Choose model for {col}", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
+    st.session_state.model_choices[col] = model_choice
+    y_vals = data[col].dropna().values
         x_vals = time_vals[:len(y_vals)]
         
 
@@ -166,8 +168,7 @@ if not data.empty and len(data.columns) > 1:
     for col in data.columns[1:]:
         if col in fit_results:
             df = fit_results[col]
-            with st.expander(f"{col}"):
-                model_choice = st.selectbox("Choose Model", ["5PL", "4PL", "Sigmoid", "Linear"], key=f"model_{col}")
+            with st.expander(f"{col} – Model: {st.session_state.model_choices[col]}"):
                 st.session_state.model_choices[col] = model_choice
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=df['Time'], y=df['Raw'], mode='markers', name='Data', marker=dict(color='black')))
