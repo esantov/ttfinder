@@ -302,7 +302,7 @@ def test_fit_4pl_on_user_data_safe(data, manual_thresh=25.0):
 # Run the test safely
 test_summary_safe_df = test_fit_4pl_on_user_data_safe(user_data, manual_thresh=25.0)
 import ace_tools as tools; tools.display_dataframe_to_user(name="TT Finder Summary (Safe 4PL, Threshold = 25)", dataframe=test_summary_safe_df)
-    st.download_button(
+st.download_button(
         "📦 Download All Plots (ZIP)",
         data=export_all_plots_zip(fit_results, st.session_state['summary_rows'], x_label, y_label, manual_thresh, combined_buf),
         file_name=f"tt_finder_plots_{datetime.datetime.now():%Y%m%d_%H%M%S}.zip",
