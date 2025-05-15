@@ -132,7 +132,7 @@ def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y
                 df.to_excel(writer, sheet_name=sample[:31], index=False)
         
             output.seek(0)
-            return output
+        return output
 
 # --- UI ---
 st.title("📈 TT Finder - Curve Fitting Tool")
