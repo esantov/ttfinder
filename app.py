@@ -9,22 +9,28 @@ from io import BytesIO
 import datetime
 import zipfile
 
+
 # --- Model Functions ---
 def logistic_5pl(x, a, d, c, b, g):
     return d + (a - d) / (1 + (x / c) ** b) ** g
 
+
 def logistic_4pl(x, a, d, c, b):
     return d + (a - d) / (1 + (x / c) ** b)
 
+
 def sigmoid(x, L, x0, k):
     return L / (1 + np.exp(-k * (x - x0)))
+
 
 def inverse_threshold_curve(y, model_func, popt):
     try:
         result = root_scalar(lambda t: model_func(t, *popt) - y, bracket=[0, 1e3], method='brentq')
         return result.root if result.converged else None
-    except:
+    except Exception as e:
+        st.warning(f"⚠️ Could not find inverse threshold curve: {e}")
         return None
+
 
 # --- Excel Export Function ---
 def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y_label, threshold):
@@ -35,127 +41,43 @@ def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y
             data.to_excel(writer, sheet_name="Original Data", index=False)
 
         # Summary Sheet
-        summary_export = []
-        for row in summary_rows:
-            summary_export.append({
+        summary_export = [
+            {
                 "Sample": row.get("Sample"),
                 "Threshold Value": threshold,
                 "Threshold Time (Tt, h)": row.get("Threshold Time"),
                 "TT CI Lower": row.get("TT CI Lower"),
                 "TT CI Upper": row.get("TT CI Upper"),
                 "TT StdErr": row.get("TT StdErr"),
-                "Log CFU/mL": row.get("Log CFU/mL")
-            })
+                "Log CFU/mL": row.get("Log CFU/mL"),
+            }
+            for row in summary_rows
+        ]
         pd.DataFrame(summary_export).to_excel(writer, sheet_name="Summary", index=False)
 
-        # Formulas
+        # Fit Parameters
         formula_map = {
             '5PL': lambda p: f"y = {p[1]:.2f} + ({p[0]:.2f} - {p[1]:.2f}) / (1 + (x / {p[2]:.2f})^{p[3]:.2f})^{p[4]:.2f}",
             '4PL': lambda p: f"y = {p[1]:.2f} + ({p[0]:.2f} - {p[1]:.2f}) / (1 + (x / {p[2]:.2f})^{p[3]:.2f})",
             'Sigmoid': lambda p: f"y = {p[0]:.2f} / (1 + exp(-{p[2]:.2f}*(x - {p[1]:.2f})))",
-            'Linear': lambda p: f"y = {p[0]:.2f} * x + {p[1]:.2f}"
-        }
-        inverse_map = {
-            '5PL': lambda p: f"x = {p[2]:.2f} * ((({p[0]:.2f} - {p[1]:.2f}) / (y - {p[1]:.2f}))**(1/{p[4]:.2f}) - 1)**(1/{p[3]:.2f})",
-            '4PL': lambda p: f"x = {p[2]:.2f} * (({p[0]:.2f} - {p[1]:.2f}) / (y - {p[1]:.2f}) - 1)**(1/{p[3]:.2f})",
-            'Sigmoid': lambda p: f"x = {p[1]:.2f} - log(({p[0]:.2f}/y) - 1) / {p[2]:.2f}",
-            'Linear': lambda p: f"x = (y - {p[1]:.2f}) / {p[0]:.2f}"
+            'Linear': lambda p: f"y = {p[0]:.2f} * x + {p[1]:.2f}",
         }
 
-        param_rows = []
-        for row in summary_rows:
-            sample = row["Sample"]
-            model = row["Model"]
-            r2 = row.get("R²")
-            df = fit_results.get(sample)
-            popt = df.attrs.get('popt') if df is not None and hasattr(df, 'attrs') else None
-            formula = formula_map.get(model, lambda _: "")(popt) if popt is not None else ""
-            inverse = inverse_map.get(model, lambda _: "")(popt) if popt is not None else ""
-            param_rows.append({
-                "Sample": sample,
-                "Model": model,
-                "R² of Fit": r2,
-                "Formula": formula,
-                "Inverse": inverse
-            })
+        param_rows = [
+            {
+                "Sample": row["Sample"],
+                "Model": row["Model"],
+                "R² of Fit": row.get("R²"),
+                "Formula": formula_map.get(row["Model"], lambda _: "")(
+                    fit_results[row["Sample"]].attrs.get('popt', [])
+                ),
+            }
+            for row in summary_rows
+        ]
         pd.DataFrame(param_rows).to_excel(writer, sheet_name="Fit Parameters", index=False)
 
-        # Fit Data Sheet
-        merged_rows = []
-        for sample, df in fit_results.items():
-            for _, row in df.iterrows():
-                merged_rows.append({
-                    "Sample": sample,
-                    "Time": row["Time"],
-                    "Raw": row.get("Raw"),
-                    "Fit": row["Fit"],
-                    "CI Lower": row["CI Lower"],
-                    "CI Upper": row["CI Upper"]
-                })
-        pd.DataFrame(merged_rows).to_excel(writer, sheet_name="Fit Data", index=False)
-
-        # Calibration (optional)
-        if calibration:
-            (a, b), _ = calibration
-            pd.DataFrame({
-                "Calibration Name": ["Manual"],
-                "Slope": [a],
-                "Intercept": [b]
-            }).to_excel(writer, sheet_name="Calibration", index=False)
-
     output.seek(0)
     return output
-
-# --- Hook into Streamlit ---
-if 'fit_results' in st.session_state and 'summary_rows' in st.session_state:
-    data = st.session_state.get("uploaded_data", pd.DataFrame())
-    fit_results = st.session_state["fit_results"]
-    summary_rows = st.session_state["summary_rows"]
-    calibration = st.session_state.get("calibration_coef")
-    x_label = st.session_state.get("x_label", "Time (h)")
-    y_label = st.session_state.get("y_label", "Signal")
-    threshold = st.session_state.get("threshold", 3.0)
-
-    if fit_results and summary_rows:
-        excel_buf = create_excel_report(
-            data, fit_results, summary_rows,
-            calibration, x_label, y_label, threshold
-        )
-
-        st.download_button(
-            "📥 Download Excel Report",
-            data=excel_buf,
-            file_name=f"tt_finder_report_{datetime.datetime.now():%Y%m%d_%H%M%S}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-
-    output.seek(0)
-    return output
-
-# --- Demo Inputs ---
-data = pd.DataFrame({
-    'Time': np.linspace(0, 10, 11),
-    'Sample1': np.random.rand(11) * 10,
-    'Sample2': np.random.rand(11) * 10,
-})
-
-threshold = 3.0
-x_label = "Time (h)"
-y_label = "Signal"
-calibration = ([1.23, 4.56], None)
-
-excel_buf = create_excel_report(
-    data, fit_results, summary_rows,
-    calibration, x_label, y_label, threshold
-)
-
-st.download_button(
-    "📥 Download Excel Report",
-    data=excel_buf,
-    file_name=f"tt_finder_report_{datetime.datetime.now():%Y%m%d_%H%M%S}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
 
 
 # --- Plotting ---
@@ -169,10 +91,7 @@ def generate_sample_plot(sample, df, x_label, y_label, threshold, tt_val=None, l
         ax.axvline(x=tt_val, color='orange', linestyle=':', label='TT')
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
-    title = f"{sample} Fit"
-    if tt_val is not None and logcfu is not None:
-        title += f" (TT: {tt_val:.2f} h, LogCFU/mL: {logcfu:.2f})"
-    ax.set_title(title)
+    ax.set_title(f"{sample} Fit (TT: {tt_val:.2f} h, LogCFU/mL: {logcfu:.2f})" if tt_val and logcfu else f"{sample} Fit")
     ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
     buf = BytesIO()
@@ -181,270 +100,58 @@ def generate_sample_plot(sample, df, x_label, y_label, threshold, tt_val=None, l
     plt.close(fig)
     return buf
 
-def generate_combined_plot(fit_results_dict, threshold, x_label, y_label, summary_rows):
-    fig, ax = plt.subplots(figsize=(10, 6))
-    for row in summary_rows:
-        sample = row['Sample']
-        df = fit_results_dict[sample]
-        tt = row.get('Threshold Time')
-        logcfu = row.get('Log CFU/mL')
-        label = f"{sample} (TT={tt:.2f}, CFU={logcfu:.2f})" if tt and logcfu else sample
-        ax.plot(df['Time'], df['Fit'], label=label)
-        ax.fill_between(df['Time'], df['CI Lower'], df['CI Upper'], alpha=0.3)
-    ax.axhline(y=threshold, color='green', linestyle='--', label='Threshold')
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
-    ax.set_title("Combined Fit Plot")
-    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.tight_layout()
-    buf = BytesIO()
-    fig.savefig(buf, format="png", dpi=300)
-    buf.seek(0)
-    plt.close(fig)
-    return buf
 
-# --- Export plots  ---
-def export_all_plots_zip(fit_results, summary_rows, x_label, y_label, threshold, combined_img_buf):
-    zip_buffer = BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-        for row in summary_rows:
-            sample = row['Sample']
-            model = row['Model']
-            tt_val = row.get('Threshold Time')
-            df = fit_results[sample]
-            img = generate_sample_plot(sample, df, x_label, y_label, threshold, tt_val)
-            zip_file.writestr(f"{sample}_{model}_fit.png", img.read())
-        zip_file.writestr("combined_fit.png", combined_img_buf.read())
-    zip_buffer.seek(0)
-    return zip_buffer
-
-# --- Export Data  ---
-def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y_label, threshold):
-    output = BytesIO()
-
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-
-        # Sheet 1: Original Data
-        if not data.empty:
-            data.to_excel(writer, sheet_name="Original Data", index=False)
-
-        # Sheet 2: Summary
-        summary_export = []
-        for row in summary_rows:
-            summary_export.append({
-                "Sample": row.get("Sample"),
-                "Threshold Value": threshold,
-                "Threshold Time (Tt, h)": row.get("Threshold Time"),
-                "TT CI Lower": row.get("TT CI Lower"),
-                "TT CI Upper": row.get("TT CI Upper"),
-                "TT StdErr": row.get("TT StdErr"),
-                "Log CFU/mL": row.get("Log CFU/mL")
-            })
-        pd.DataFrame(summary_export).to_excel(writer, sheet_name="Summary", index=False)
-
-        # Sheet 3: Fit Parameters with formulas
-        formula_map = {
-            '5PL': lambda p: f"y = {p[1]:.2f} + ({p[0]:.2f} - {p[1]:.2f}) / (1 + (x / {p[2]:.2f})^{p[3]:.2f})^{p[4]:.2f}",
-            '4PL': lambda p: f"y = {p[1]:.2f} + ({p[0]:.2f} - {p[1]:.2f}) / (1 + (x / {p[2]:.2f})^{p[3]:.2f})",
-            'Sigmoid': lambda p: f"y = {p[0]:.2f} / (1 + exp(-{p[2]:.2f}*(x - {p[1]:.2f})))",
-            'Linear': lambda p: f"y = {p[0]:.2f} * x + {p[1]:.2f}"
-        }
-
-        inverse_map = {
-            '5PL': lambda p: f"x = {p[2]:.2f} * ((({p[0]:.2f} - {p[1]:.2f}) / (y - {p[1]:.2f}))**(1/{p[4]:.2f}) - 1)**(1/{p[3]:.2f})",
-            '4PL': lambda p: f"x = {p[2]:.2f} * (({p[0]:.2f} - {p[1]:.2f}) / (y - {p[1]:.2f}) - 1)**(1/{p[3]:.2f})",
-            'Sigmoid': lambda p: f"x = {p[1]:.2f} - log(({p[0]:.2f}/y) - 1) / {p[2]:.2f}",
-            'Linear': lambda p: f"x = (y - {p[1]:.2f}) / {p[0]:.2f}"
-        }
-
-        param_export = []
-        for row in summary_rows:
-            sample = row['Sample']
-            model = row['Model']
-            params = fit_results.get(sample)
-            if params is not None and hasattr(params, 'attrs') and 'popt' in params.attrs:
-                popt = params.attrs['popt']
-                param_export.append({
-                    "Sample": sample,
-                    "Model": model,
-                    "R² of Fit": row.get("R²"),
-                    "Formula": formula_map.get(model, lambda _: "")(popt),
-                    "Inverse": inverse_map.get(model, lambda _: "")(popt)
-                })
-        pd.DataFrame(param_export).to_excel(writer, sheet_name="Fit Parameters", index=False)
-
-        # Sheet 4: Merged Fit Data
-        fit_merged = []
-        for sample, df in fit_results.items():
-            for i in range(len(df)):
-                fit_merged.append({
-                    "Sample": sample,
-                    "Time": df.iloc[i]['Time'],
-                    "Fit": df.iloc[i]['Fit'],
-                    "CI Lower": df.iloc[i]['CI Lower'],
-                    "CI Upper": df.iloc[i]['CI Upper']
-                })
-        pd.DataFrame(fit_merged).to_excel(writer, sheet_name="Fit Data", index=False)
-
-        # Optional Calibration
-        if calibration:
-            (a, b), _ = calibration
-            pd.DataFrame({"Calibration Name": ["Manual"], "Slope": [a], "Intercept": [b]}).to_excel(
-                writer, sheet_name="Calibration", index=False
-            )
-
-    output.seek(0)
-    return output
-
-# --- UI ---
+# --- Streamlit App ---
 st.title("📈 TT Finder - Curve Fitting Tool")
+
+# Inputs
 x_label = st.text_input("X-axis label", "Time (h)")
 y_label = st.text_input("Y-axis label", "Signal")
-manual_thresh = st.number_input("Threshold", 0.0, 100.0, 3.0, 0.1)
-dpi = st.slider("Plot DPI", 100, 600, 300, 50)
+threshold = st.number_input("Threshold", 0.0, 100.0, 3.0, 0.1)
 
 # Calibration
-st.markdown("### Calibration")
 manual_calib = st.checkbox("Use manual calibration")
 if manual_calib:
-    a = st.number_input("Slope (a)", value=0.0)
-    b = st.number_input("Intercept (b)", value=0.0)
-    st.session_state['calibration_coef'] = ([a, b], None)
+    slope = st.number_input("Slope (a)", value=1.0)
+    intercept = st.number_input("Intercept (b)", value=0.0)
+    calibration = ([slope, intercept], None)
+else:
+    calibration = None
 
-# Upload data
-uploaded = st.file_uploader("Upload CSV", type="csv")
-if uploaded:
-    data = pd.read_csv(uploaded)
+# Upload CSV
+uploaded_file = st.file_uploader("Upload CSV", type="csv")
+if uploaded_file:
+    data = pd.read_csv(uploaded_file)
     st.dataframe(data.head())
 else:
-    data = pd.DataFrame({"Time": []})
+    st.warning("Please upload a CSV file.")
+    st.stop()
 
-# Init
-if 'summary_rows' not in st.session_state:
-    st.session_state['summary_rows'] = []
-
+# Fit models
 fit_results = {}
+summary_rows = []
 
-# --- Fitting ---
-if not data.empty and len(data.columns) > 1:
-    st.session_state['summary_rows'] = []
-    time = data.iloc[:, 0].dropna().values
-    for col in data.columns[1:]:
-        y = data[col].dropna().values
-        x = time[:len(y)]
+for col in data.columns[1:]:
+    x = data.iloc[:, 0].values
+    y = data[col].values
 
-        with st.expander(f"{col}"):
-            model = st.selectbox("Model", ["5PL", "4PL", "Sigmoid", "Linear"], key=col)
-
-            if model == "5PL":
-                func = logistic_5pl; p0 = [min(y), max(y), np.median(x), 1, 1]
-            elif model == "4PL":
-                func = logistic_4pl; p0 = [min(y), max(y), np.median(x), 1]
-            elif model == "Sigmoid":
-                func = sigmoid; p0 = [max(y), np.median(x), 1]
+    with st.expander(f"Fit: {col}"):
+        model = st.selectbox("Model", ["5PL", "4PL", "Sigmoid", "Linear"], key=col)
+        try:
+            if model == "Linear":
+                popt = np.polyfit(x, y, 1)
+                y_fit = np.polyval(popt, x)
+            elif model == "5PL":
+                popt, _ = curve_fit(logistic_5pl, x, y, maxfev=10000)
+                y_fit = logistic_5pl(x, *popt)
             else:
-                func = lambda x, a, b: a * x + b; p0 = None
+                st.error("Only Linear and 5PL models implemented.")
+                continue
 
-            try:
-                if model == "Linear":
-                    popt = np.polyfit(x, y, 1)
-                    y_fit = np.polyval(popt, x)
-                    y_ci = (y_fit, y_fit)
-                else:
-                    popt, pcov = curve_fit(func, x, y, p0=p0, maxfev=10000)
-                    y_fit = func(x, *popt)
-                    dof = len(x) - len(popt)
-                    tval = t.ppf(0.975, dof)
-                    ci_low, ci_high = [], []
-                    for i, xi in enumerate(x):
-                        grad = np.array([(func(xi, *(popt + np.eye(len(popt))[j]*1e-5)) - y_fit[i]) / 1e-5 for j in range(len(popt))])
-                        se = np.sqrt(grad @ pcov @ grad.T)
-                        delta = tval * se
-                        ci_low.append(y_fit[i] - delta)
-                        ci_high.append(y_fit[i] + delta)
-                    y_ci = (np.array(ci_low), np.array(ci_high))
+            # Save Results
+            fit_df = pd.DataFrame({"Time": x, "Raw": y, "Fit": y_fit})
+            fit_results[col] = fit_df
+            st.line_chart(y_fit)
 
-                r2 = r2_score(y, y_fit)
-                tt_val = inverse_threshold_curve(manual_thresh, func, popt)
-
-   # Confidence Interval & StdErr for TT                
-                tt_ci_low = tt_ci_high = tt_stderr = None
-                if tt_val is not None and model != "Linear" and pcov is not None:
-                    try:
-                        grad_tt = np.array([
-                            (inverse_threshold_curve(manual_thresh + 1e-5, func, popt) -
-                             inverse_threshold_curve(manual_thresh, func, popt)) / 1e-5
-                        ])
-                        if pcov.shape[0] == grad_tt.shape[0]:
-                            tt_stderr = np.sqrt(grad_tt @ pcov @ grad_tt.T)
-                            delta = tval * tt_stderr
-                            tt_ci_low = tt_val - delta
-                            tt_ci_high = tt_val + delta
-                    except Exception as e:
-                        st.warning(f"⚠️ Could not calculate CI for TT in {col}: {e}")
-                          
-                
-                logcfu = None
-                if tt_val and 'calibration_coef' in st.session_state:
-                    a, b = st.session_state['calibration_coef'][0]
-                    logcfu = a * tt_val + b
-
-                fit_df = pd.DataFrame({'Time': x, 'Raw': y, 'Fit': y_fit, 'CI Lower': y_ci[0], 'CI Upper': y_ci[1]})
-                fit_df.attrs['popt'] = popt  # Required for Excel export
-                fit_results[col] = fit_df
-                st.session_state['summary_rows'].append({
-                    'Sample': col,
-                    'Model': model,
-                    'R²': round(r2, 3),
-                    'Threshold Time': tt_val,
-                    'TT CI Lower': float(tt_ci_low[0]) if isinstance(tt_ci_low, np.ndarray) else tt_ci_low,
-                    'TT CI Upper': float(tt_ci_high[0]) if isinstance(tt_ci_high, np.ndarray) else tt_ci_high,
-                    'TT StdErr': float(tt_stderr[0]) if isinstance(tt_stderr, np.ndarray) else tt_stderr,
-                    'Log CFU/mL': logcfu
-                })
-
-                img_buf = generate_sample_plot(col, fit_df, x_label, y_label, manual_thresh, tt_val, logcfu)
-                st.image(img_buf, caption=f"{col} Fit", use_container_width=True)
-
-            except Exception as e:
-                st.error(f"❌ Fitting failed for {col}: {e}")
-   
-    # After fitting all samples
-    combined_buf = generate_combined_plot(
-        fit_results,
-        manual_thresh,
-        x_label,
-        y_label,
-        st.session_state['summary_rows']
-    )
-    
-    st.markdown("### 📊 Combined Fit Plot")
-    st.image(combined_buf, caption="Combined Fit of All Samples", use_container_width=True)
-
-
-    # --- Summary + Downloads ---
-    if st.session_state.get("summary_rows"):
-        summary_df = pd.DataFrame(st.session_state["summary_rows"])
-        st.markdown("### 🧾 TT and Log CFU/mL Summary")
-        st.dataframe(summary_df[["Sample", "Threshold Time", "Log CFU/mL"]], use_container_width=True)
-
-        combined_buf = generate_combined_plot(fit_results, manual_thresh, x_label, y_label, st.session_state["summary_rows"])
-
-        st.download_button(
-            "📦 Download All Plots (ZIP)",
-            data=export_all_plots_zip(fit_results, st.session_state["summary_rows"], x_label, y_label, manual_thresh, combined_buf),
-            file_name=f"tt_finder_plots_{datetime.datetime.now():%Y%m%d_%H%M%S}.zip",
-            mime="application/zip"
-        )
-
-        excel_buf = create_excel_report(
-            data, fit_results, st.session_state["summary_rows"],
-            st.session_state.get('calibration_coef'), x_label, y_label, manual_thresh
-        )
-
-        st.download_button(
-            "📥 Download Excel Report",
-            data=excel_buf,
-            file_name=f"tt_finder_report_{datetime.datetime.now():%Y%m%d_%H%M%S}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        except Exception as e:
+            st.error(f"Fit failed for {col}: {e}")
