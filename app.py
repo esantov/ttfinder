@@ -66,11 +66,11 @@ def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y
         for row in summary_rows:
             sample = row["Sample"]
             model = row["Model"]
-            r2 = row["R²"]
+            r2 = row.get("R²")
             df = fit_results.get(sample)
-            popt = df.attrs.get('popt') if df is not None else None
-            formula = formula_map.get(model, lambda _: "")(popt) if popt else ""
-            inverse = inverse_map.get(model, lambda _: "")(popt) if popt else ""
+            popt = df.attrs.get('popt') if df is not None and hasattr(df, 'attrs') else None
+            formula = formula_map.get(model, lambda _: "")(popt) if popt is not None else ""
+            inverse = inverse_map.get(model, lambda _: "")(popt) if popt is not None else ""
             param_rows.append({
                 "Sample": sample,
                 "Model": model,
@@ -87,6 +87,7 @@ def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y
                 merged_rows.append({
                     "Sample": sample,
                     "Time": row["Time"],
+                    "Raw": row.get("Raw"),
                     "Fit": row["Fit"],
                     "CI Lower": row["CI Lower"],
                     "CI Upper": row["CI Upper"]
@@ -101,6 +102,33 @@ def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y
                 "Slope": [a],
                 "Intercept": [b]
             }).to_excel(writer, sheet_name="Calibration", index=False)
+
+    output.seek(0)
+    return output
+
+# --- Hook into Streamlit ---
+if 'fit_results' in st.session_state and 'summary_rows' in st.session_state:
+    data = st.session_state.get("uploaded_data", pd.DataFrame())
+    fit_results = st.session_state["fit_results"]
+    summary_rows = st.session_state["summary_rows"]
+    calibration = st.session_state.get("calibration_coef")
+    x_label = st.session_state.get("x_label", "Time (h)")
+    y_label = st.session_state.get("y_label", "Signal")
+    threshold = st.session_state.get("threshold", 3.0)
+
+    if fit_results and summary_rows:
+        excel_buf = create_excel_report(
+            data, fit_results, summary_rows,
+            calibration, x_label, y_label, threshold
+        )
+
+        st.download_button(
+            "📥 Download Excel Report",
+            data=excel_buf,
+            file_name=f"tt_finder_report_{datetime.datetime.now():%Y%m%d_%H%M%S}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
 
     output.seek(0)
     return output
