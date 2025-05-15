@@ -26,6 +26,110 @@ def inverse_threshold_curve(y, model_func, popt):
     except:
         return None
 
+# --- Excel Export Function ---
+def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y_label, threshold):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        # Original Data
+        if not data.empty:
+            data.to_excel(writer, sheet_name="Original Data", index=False)
+
+        # Summary Sheet
+        summary_export = []
+        for row in summary_rows:
+            summary_export.append({
+                "Sample": row.get("Sample"),
+                "Threshold Value": threshold,
+                "Threshold Time (Tt, h)": row.get("Threshold Time"),
+                "TT CI Lower": row.get("TT CI Lower"),
+                "TT CI Upper": row.get("TT CI Upper"),
+                "TT StdErr": row.get("TT StdErr"),
+                "Log CFU/mL": row.get("Log CFU/mL")
+            })
+        pd.DataFrame(summary_export).to_excel(writer, sheet_name="Summary", index=False)
+
+        # Formulas
+        formula_map = {
+            '5PL': lambda p: f"y = {p[1]:.2f} + ({p[0]:.2f} - {p[1]:.2f}) / (1 + (x / {p[2]:.2f})^{p[3]:.2f})^{p[4]:.2f}",
+            '4PL': lambda p: f"y = {p[1]:.2f} + ({p[0]:.2f} - {p[1]:.2f}) / (1 + (x / {p[2]:.2f})^{p[3]:.2f})",
+            'Sigmoid': lambda p: f"y = {p[0]:.2f} / (1 + exp(-{p[2]:.2f}*(x - {p[1]:.2f})))",
+            'Linear': lambda p: f"y = {p[0]:.2f} * x + {p[1]:.2f}"
+        }
+        inverse_map = {
+            '5PL': lambda p: f"x = {p[2]:.2f} * ((({p[0]:.2f} - {p[1]:.2f}) / (y - {p[1]:.2f}))**(1/{p[4]:.2f}) - 1)**(1/{p[3]:.2f})",
+            '4PL': lambda p: f"x = {p[2]:.2f} * (({p[0]:.2f} - {p[1]:.2f}) / (y - {p[1]:.2f}) - 1)**(1/{p[3]:.2f})",
+            'Sigmoid': lambda p: f"x = {p[1]:.2f} - log(({p[0]:.2f}/y) - 1) / {p[2]:.2f}",
+            'Linear': lambda p: f"x = (y - {p[1]:.2f}) / {p[0]:.2f}"
+        }
+
+        param_rows = []
+        for row in summary_rows:
+            sample = row["Sample"]
+            model = row["Model"]
+            r2 = row["R²"]
+            df = fit_results.get(sample)
+            popt = df.attrs.get('popt') if df is not None else None
+            formula = formula_map.get(model, lambda _: "")(popt) if popt else ""
+            inverse = inverse_map.get(model, lambda _: "")(popt) if popt else ""
+            param_rows.append({
+                "Sample": sample,
+                "Model": model,
+                "R² of Fit": r2,
+                "Formula": formula,
+                "Inverse": inverse
+            })
+        pd.DataFrame(param_rows).to_excel(writer, sheet_name="Fit Parameters", index=False)
+
+        # Fit Data Sheet
+        merged_rows = []
+        for sample, df in fit_results.items():
+            for _, row in df.iterrows():
+                merged_rows.append({
+                    "Sample": sample,
+                    "Time": row["Time"],
+                    "Fit": row["Fit"],
+                    "CI Lower": row["CI Lower"],
+                    "CI Upper": row["CI Upper"]
+                })
+        pd.DataFrame(merged_rows).to_excel(writer, sheet_name="Fit Data", index=False)
+
+        # Calibration (optional)
+        if calibration:
+            (a, b), _ = calibration
+            pd.DataFrame({
+                "Calibration Name": ["Manual"],
+                "Slope": [a],
+                "Intercept": [b]
+            }).to_excel(writer, sheet_name="Calibration", index=False)
+
+    output.seek(0)
+    return output
+
+# --- Demo Inputs ---
+data = pd.DataFrame({
+    'Time': np.linspace(0, 10, 11),
+    'Sample1': np.random.rand(11) * 10,
+    'Sample2': np.random.rand(11) * 10,
+})
+
+threshold = 3.0
+x_label = "Time (h)"
+y_label = "Signal"
+calibration = ([1.23, 4.56], None)
+
+excel_buf = create_excel_report(
+    data, fit_results, summary_rows,
+    calibration, x_label, y_label, threshold
+)
+
+st.download_button(
+    "📥 Download Excel Report",
+    data=excel_buf,
+    file_name=f"tt_finder_report_{datetime.datetime.now():%Y%m%d_%H%M%S}.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+
+
 # --- Plotting ---
 def generate_sample_plot(sample, df, x_label, y_label, threshold, tt_val=None, logcfu=None):
     fig, ax = plt.subplots(figsize=(6, 4))
