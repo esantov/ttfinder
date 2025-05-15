@@ -99,5 +99,25 @@ for col in data.columns[1:]:
                 popt = np.polyfit(x, y, 1)
                 y_fit = np.polyval(popt, x)
             elif model == "5PL":
-               ***
-
+                popt, _ = curve_fit(logistic_5pl, x, y, maxfev=10000)
+                y_fit = logistic_5pl(x, *popt)
+            elif model == "4PL":
+                popt, _ = curve_fit(logistic_4pl, x, y, maxfev=10000)
+                y_fit = logistic_4pl(x, *popt)
+            elif model == "Sigmoid":
+                popt, _ = curve_fit(sigmoid, x, y, maxfev=10000)
+                y_fit = sigmoid(x, *popt)
+            elif model == "Gompertz":
+                popt, _ = curve_fit(gompertz, x, y, maxfev=10000)
+                y_fit = gompertz(x, *popt)
+            else:
+                st.error("Unsupported model selected.")
+                continue
+
+            # Calculate confidence intervals
+            dof = len(x) - len(popt)
+            tval = t.ppf(0.975, dof)
+            ci_lower, ci_upper = [], []
+            for i, xi in enumerate(x):
+                grad = np.array([(gompertz(xi, *(popt + np.eye(len(popt))[j]*1e-5)) - y_fit[i]) / 1e-5 for j in range(len(popt))])
+                se = np.sqrt(grad @ np.cov(x) )
