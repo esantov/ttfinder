@@ -113,7 +113,7 @@ for col in data.columns[1:]:
             else:
                 st.error("Unsupported model selected.")
                 continue
-    try:
+          try:
         # Calculate confidence intervals
         dof = len(x) - len(popt)
         tval = t.ppf(0.975, dof)
