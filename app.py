@@ -13,115 +13,113 @@ import zipfile
 def logistic_5pl(x, a, d, c, b, g):
     return d + (a - d) / (1 + (x / c) ** b) ** g
 
-
 def logistic_4pl(x, a, d, c, b):
     return d + (a - d) / (1 + (x / c) ** b)
 
-
 def sigmoid(x, L, x0, k):
     return L / (1 + np.exp(-k * (x - x0)))
-
-
-def gompertz(x, A, B, C):
-    """Gompertz growth model."""
-    return A * np.exp(-B * np.exp(-C * x))
-
 
 def inverse_threshold_curve(y, model_func, popt):
     try:
         result = root_scalar(lambda t: model_func(t, *popt) - y, bracket=[0, 1e3], method='brentq')
         return result.root if result.converged else None
-    except Exception as e:
-        st.warning(f"⚠️ Could not find inverse threshold curve: {e}")
+    except:
         return None
 
+# --- Excel Export Function ---
+def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y_label, threshold):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        if not data.empty:
+            data.to_excel(writer, sheet_name="Original Data", index=False)
 
-# --- Plotting ---
-def generate_sample_plot(sample, df, x_label, y_label, threshold, tt_val=None, logcfu=None):
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.plot(df['Time'], df['Raw'], 'o', label='Data', color='black')
-    ax.plot(df['Time'], df['Fit'], label='Fit', color='blue')
-    ax.fill_between(df['Time'], df['CI Lower'], df['CI Upper'], color='red', alpha=0.1, label='95% CI')
-    ax.axhline(y=threshold, color='green', linestyle='--', label='Threshold')
-    if tt_val is not None:
-        ax.axvline(x=tt_val, color='orange', linestyle=':', label='TT')
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
-    ax.set_title(f"{sample} Fit (TT: {tt_val:.2f} h, LogCFU/mL: {logcfu:.2f})" if tt_val and logcfu else f"{sample} Fit")
-    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.tight_layout()
-    buf = BytesIO()
-    fig.savefig(buf, format="png", dpi=300)
-    buf.seek(0)
-    plt.close(fig)
-    return buf
+        summary_export = []
+        for row in summary_rows:
+            summary_export.append({
+                "Sample": row.get("Sample"),
+                "Threshold Value": threshold,
+                "Threshold Time (Tt, h)": row.get("Threshold Time"),
+                "TT CI Lower": row.get("TT CI Lower"),
+                "TT CI Upper": row.get("TT CI Upper"),
+                "TT StdErr": row.get("TT StdErr"),
+                "Log CFU/mL": row.get("Log CFU/mL")
+            })
+        pd.DataFrame(summary_export).to_excel(writer, sheet_name="Summary", index=False)
 
+        formula_map = {
+            '5PL': lambda p: f"y = {p[1]:.2f} + ({p[0]:.2f} - {p[1]:.2f}) / (1 + (x / {p[2]:.2f})^{p[3]:.2f})^{p[4]:.2f}",
+            '4PL': lambda p: f"y = {p[1]:.2f} + ({p[0]:.2f} - {p[1]:.2f}) / (1 + (x / {p[2]:.2f})^{p[3]:.2f})",
+            'Sigmoid': lambda p: f"y = {p[0]:.2f} / (1 + exp(-{p[2]:.2f}*(x - {p[1]:.2f})))",
+            'Linear': lambda p: f"y = {p[0]:.2f} * x + {p[1]:.2f}"
+        }
+        inverse_map = {
+            '5PL': lambda p: f"x = {p[2]:.2f} * ((({p[0]:.2f} - {p[1]:.2f}) / (y - {p[1]:.2f}))**(1/{p[4]:.2f}) - 1)**(1/{p[3]:.2f})",
+            '4PL': lambda p: f"x = {p[2]:.2f} * (({p[0]:.2f} - {p[1]:.2f}) / (y - {p[1]:.2f}) - 1)**(1/{p[3]:.2f})",
+            'Sigmoid': lambda p: f"x = {p[1]:.2f} - log(({p[0]:.2f}/y) - 1) / {p[2]:.2f}",
+            'Linear': lambda p: f"x = (y - {p[1]:.2f}) / {p[0]:.2f}"
+        }
 
-# --- Streamlit App ---
-st.title("📈 TT Finder - Curve Fitting Tool")
+        param_rows = []
+        for row in summary_rows:
+            sample = row["Sample"]
+            model = row["Model"]
+            r2 = row.get("R²")
+            df = fit_results.get(sample)
+            popt = df.attrs.get('popt') if df is not None and hasattr(df, 'attrs') else None
+            formula = formula_map.get(model, lambda _: "")(popt) if popt is not None else ""
+            inverse = inverse_map.get(model, lambda _: "")(popt) if popt is not None else ""
+            param_rows.append({
+                "Sample": sample,
+                "Model": model,
+                "R² of Fit": r2,
+                "Formula": formula,
+                "Inverse": inverse
+            })
+        pd.DataFrame(param_rows).to_excel(writer, sheet_name="Fit Parameters", index=False)
 
-# Inputs
-x_label = st.text_input("X-axis label", "Time (h)")
-y_label = st.text_input("Y-axis label", "Signal")
-threshold = st.number_input("Threshold", 0.0, 100.0, 3.0, 0.1)
+        merged_rows = []
+        for sample, df in fit_results.items():
+            for _, row in df.iterrows():
+                merged_rows.append({
+                    "Sample": sample,
+                    "Time": row["Time"],
+                    "Raw": row.get("Raw"),
+                    "Fit": row["Fit"],
+                    "CI Lower": row["CI Lower"],
+                    "CI Upper": row["CI Upper"]
+                })
+        pd.DataFrame(merged_rows).to_excel(writer, sheet_name="Fit Data", index=False)
 
-# Calibration
-manual_calib = st.checkbox("Use manual calibration")
-if manual_calib:
-    slope = st.number_input("Slope (a)", value=1.0)
-    intercept = st.number_input("Intercept (b)", value=0.0)
-    calibration = ([slope, intercept], None)
-else:
-    calibration = None
+        if calibration:
+            (a, b), _ = calibration
+            pd.DataFrame({
+                "Calibration Name": ["Manual"],
+                "Slope": [a],
+                "Intercept": [b]
+            }).to_excel(writer, sheet_name="Calibration", index=False)
 
-# Upload CSV
-uploaded_file = st.file_uploader("Upload CSV", type="csv")
-if uploaded_file:
-    data = pd.read_csv(uploaded_file)
-    st.dataframe(data.head())
-else:
-    st.warning("Please upload a CSV file.")
-    st.stop()
+    output.seek(0)
+    return output
 
-# Fit models
-fit_results = {}
-summary_rows = []
+# --- Hook into Streamlit ---
+if 'fit_results' in st.session_state and 'summary_rows' in st.session_state:
+    data = st.session_state.get("uploaded_data", pd.DataFrame())
+    fit_results = st.session_state["fit_results"]
+    summary_rows = st.session_state["summary_rows"]
+    calibration = st.session_state.get("calibration_coef")
+    x_label = st.session_state.get("x_label", "Time (h)")
+    y_label = st.session_state.get("y_label", "Signal")
+    threshold = st.session_state.get("threshold", 3.0)
 
-for col in data.columns[1:]:
-    x = data.iloc[:, 0].values
-    y = data[col].values
+    if fit_results and summary_rows:
+        excel_buf = create_excel_report(
+            data, fit_results, summary_rows,
+            calibration, x_label, y_label, threshold
+        )
 
-    with st.expander(f"Fit: {col}"):
-        model = st.selectbox("Model", ["5PL", "4PL", "Sigmoid", "Gompertz", "Linear"], key=col)
-        try:
-            # Define initial parameters and fitting function
-            if model == "Linear":
-                popt = np.polyfit(x, y, 1)
-                y_fit = np.polyval(popt, x)
-            elif model == "5PL":
-                popt, _ = curve_fit(logistic_5pl, x, y, maxfev=10000)
-                y_fit = logistic_5pl(x, *popt)
-            elif model == "4PL":
-                popt, _ = curve_fit(logistic_4pl, x, y, maxfev=10000)
-                y_fit = logistic_4pl(x, *popt)
-            elif model == "Sigmoid":
-                popt, _ = curve_fit(sigmoid, x, y, maxfev=10000)
-                y_fit = sigmoid(x, *popt)
-            elif model == "Gompertz":
-                popt, _ = curve_fit(gompertz, x, y, maxfev=10000)
-                y_fit = gompertz(x, *popt)
-            else:
-                st.error("Unsupported model selected.")
-                continue
-            # Calculate confidence intervals
-            dof = len(x) - len(popt)
-            tval = t.ppf(0.975, dof)
-            ci_lower, ci_upper = [], []
-            for i, xi in enumerate(x):
-                grad = np.array([(gompertz(xi, *(popt + np.eye(len(popt))[j]*1e-5)) - y_fit[i]) / 1e-5 for j in range(len(popt))])
-                se = np.sqrt(grad @ np.cov(x))  # Ensure this line is properly indented and within the try block
-                delta = tval * se
-                ci_lower.append(y_fit[i] - delta)
-                ci_upper.append(y_fit[i] + delta)
-        except Exception as e:
-            st.warning(f"⚠️ Could not calculate confidence intervals: {e}")
+        st.download_button(
+            "📥 Download Excel Report",
+            data=excel_buf,
+            file_name=f"tt_finder_report_{datetime.datetime.now():%Y%m%d_%H%M%S}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
