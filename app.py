@@ -71,6 +71,7 @@ def generate_combined_plot(fit_results_dict, threshold, x_label, y_label, summar
     plt.close(fig)
     return buf
 
+# --- Export plots  ---
 def export_all_plots_zip(fit_results, summary_rows, x_label, y_label, threshold, combined_img_buf):
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, "w") as zip_file:
@@ -85,102 +86,82 @@ def export_all_plots_zip(fit_results, summary_rows, x_label, y_label, threshold,
     zip_buffer.seek(0)
     return zip_buffer
 
-def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y_label):
+# --- Export Data  ---
+def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y_label, threshold):
     output = BytesIO()
+
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+
+        # Sheet 1: Original Data
         if not data.empty:
             data.to_excel(writer, sheet_name="Original Data", index=False)
-        if calibration:
-            (a, b), _ = calibration
-            pd.DataFrame({"Calibration Name": ["Manual"], "Slope": [a], "Intercept": [b]}).to_excel(writer, sheet_name="Calibration", index=False)
-        if summary_rows:
-            summary_df = pd.DataFrame(summary_rows)
-            expected_cols = [
-                "Sample", "Model", "R²", "Threshold Time", "TT CI Lower",
-                "TT CI Upper", "TT StdErr", "Log CFU/mL"
-            ]
 
-            # Ensure all expected columns are present (fill missing with None)
-            for col in expected_cols:
-                if col not in summary_df.columns:
-                    summary_df[col] = None
-            
-            summary_df = summary_df[expected_cols]
-            summary_df.to_excel(writer, sheet_name="Summary", index=False)
+        # Sheet 2: Summary
+        summary_export = []
+        for row in summary_rows:
+            summary_export.append({
+                "Sample": row.get("Sample"),
+                "Threshold Value": threshold,
+                "Threshold Time (Tt, h)": row.get("Threshold Time"),
+                "TT CI Lower": row.get("TT CI Lower"),
+                "TT CI Upper": row.get("TT CI Upper"),
+                "TT StdErr": row.get("TT StdErr"),
+                "Log CFU/mL": row.get("Log CFU/mL")
+            })
+        pd.DataFrame(summary_export).to_excel(writer, sheet_name="Summary", index=False)
 
+        # Sheet 3: Fit Parameters with formulas
+        formula_map = {
+            '5PL': lambda p: f"y = {p[1]:.2f} + ({p[0]:.2f} - {p[1]:.2f}) / (1 + (x / {p[2]:.2f})^{p[3]:.2f})^{p[4]:.2f}",
+            '4PL': lambda p: f"y = {p[1]:.2f} + ({p[0]:.2f} - {p[1]:.2f}) / (1 + (x / {p[2]:.2f})^{p[3]:.2f})",
+            'Sigmoid': lambda p: f"y = {p[0]:.2f} / (1 + exp(-{p[2]:.2f}*(x - {p[1]:.2f})))",
+            'Linear': lambda p: f"y = {p[0]:.2f} * x + {p[1]:.2f}"
+        }
 
-            # Add formulas and CI
-            formula_map = {
-                '5PL': "y = d + (a - d) / (1 + (x / c)^b)^g",
-                '4PL': "y = d + (a - d) / (1 + (x / c)^b)",
-                'Sigmoid': "y = L / (1 + exp(-k*(x - x0)))",
-                'Linear': "y = a*x + b"
-            }
-            inverse_map = {
-                '5PL': "x = c * (((a - d)/(y - d))^(1/g) - 1)^(1/b)",
-                '4PL': "x = c * ((a - d)/(y - d) - 1)^(1/b)",
-                'Sigmoid': "x = x0 - log((L/y) - 1)/k",
-                'Linear': "x = (y - b) / a"
-            }
+        inverse_map = {
+            '5PL': lambda p: f"x = {p[2]:.2f} * ((({p[0]:.2f} - {p[1]:.2f}) / (y - {p[1]:.2f}))**(1/{p[4]:.2f}) - 1)**(1/{p[3]:.2f})",
+            '4PL': lambda p: f"x = {p[2]:.2f} * (({p[0]:.2f} - {p[1]:.2f}) / (y - {p[1]:.2f}) - 1)**(1/{p[3]:.2f})",
+            'Sigmoid': lambda p: f"x = {p[1]:.2f} - log(({p[0]:.2f}/y) - 1) / {p[2]:.2f}",
+            'Linear': lambda p: f"x = (y - {p[1]:.2f}) / {p[0]:.2f}"
+        }
 
-            param_rows = []
-            for row in summary_rows:
-                model = row['Model']
-                sample = row['Sample']
-                params_df = fit_results.get(sample)
-                popt = None
-    
-                # Try to extract parameters from the fitted dataframe if stored
-                if params_df is not None and 'Fit' in params_df:
-                    try:
-                        popt = np.polyfit(params_df['Time'], params_df['Fit'], 1) if model == 'Linear' else None
-                    except:
-                        popt = None
-    
-                formula = formula_map.get(model, '')
-                inverse = inverse_map.get(model, '')
-    
-                # Use the actual values stored from the summary (your main storage of popt)
-                # You can keep popt directly if you stored it earlier in session state, but we'll reconstruct from values here
-                fitted_params = []
-                if model == "Linear":
-                    fitted_params = np.polyfit(params_df['Time'], params_df['Fit'], 1)
-                    full_formula = f"y = {fitted_params[0]:.4f} * x + {fitted_params[1]:.4f}"
-                elif model == "4PL" and 'Threshold Time' in row:
-                    # Manually map to names: a, d, c, b
-                    if 'TT CI Lower' in row:  # this means popt was calculated
-                        a = row.get('CI Params', [])[0] if 'CI Params' in row else None
-                        d = row.get('CI Params', [])[1] if 'CI Params' in row else None
-                        c = row.get('CI Params', [])[2] if 'CI Params' in row else None
-                        b = row.get('CI Params', [])[3] if 'CI Params' in row else None
-                        full_formula = f"y = {d:.4f} + ({a:.4f} - {d:.4f}) / (1 + (x / {c:.4f})^{b:.4f})" if None not in (a,d,c,b) else ""
-                    else:
-                        full_formula = ""
-                else:
-                    full_formula = ""  # Add cases for 5PL or sigmoid if desired
-    
-                entry = {
+        param_export = []
+        for row in summary_rows:
+            sample = row['Sample']
+            model = row['Model']
+            params = fit_results.get(sample)
+            if params is not None and hasattr(params, 'attrs') and 'popt' in params.attrs:
+                popt = params.attrs['popt']
+                param_export.append({
                     "Sample": sample,
                     "Model": model,
-                    "Formula": formula,
-                    "Inverse": inverse,
-                    "TT": row.get("Threshold Time"),
-                    "TT CI Lower": row.get("TT CI Lower"),
-                    "TT CI Upper": row.get("TT CI Upper"),
-                    "TT StdErr": row.get("TT StdErr"),
-                    "Log CFU/mL": row.get("Log CFU/mL"),
-                    "Full Formula": full_formula
-                }
-    
-                param_rows.append(entry)
+                    "R² of Fit": row.get("R²"),
+                    "Formula": formula_map.get(model, lambda _: "")(popt),
+                    "Inverse": inverse_map.get(model, lambda _: "")(popt)
+                })
+        pd.DataFrame(param_export).to_excel(writer, sheet_name="Fit Parameters", index=False)
 
-        
-        pd.DataFrame(param_rows).to_excel(writer, sheet_name="Fit Parameters", index=False)
-        
+        # Sheet 4: Merged Fit Data
+        fit_merged = []
         for sample, df in fit_results.items():
-            df.to_excel(writer, sheet_name=sample[:31], index=False)
-        
-        output.seek(0)
+            for i in range(len(df)):
+                fit_merged.append({
+                    "Sample": sample,
+                    "Time": df.iloc[i]['Time'],
+                    "Fit": df.iloc[i]['Fit'],
+                    "CI Lower": df.iloc[i]['CI Lower'],
+                    "CI Upper": df.iloc[i]['CI Upper']
+                })
+        pd.DataFrame(fit_merged).to_excel(writer, sheet_name="Fit Data", index=False)
+
+        # Optional Calibration
+        if calibration:
+            (a, b), _ = calibration
+            pd.DataFrame({"Calibration Name": ["Manual"], "Slope": [a], "Intercept": [b]}).to_excel(
+                writer, sheet_name="Calibration", index=False
+            )
+
+    output.seek(0)
     return output
 
 # --- UI ---
