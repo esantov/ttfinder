@@ -109,35 +109,71 @@ def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y
             summary_df.to_excel(writer, sheet_name="Summary", index=False)
 
 
-        # Add formulas and CI
-        formula_map = {
-            '5PL': "y = d + (a - d) / (1 + (x / c)^b)^g",
-            '4PL': "y = d + (a - d) / (1 + (x / c)^b)",
-            'Sigmoid': "y = L / (1 + exp(-k*(x - x0)))",
-            'Linear': "y = a*x + b"
-        }
-        inverse_map = {
-            '5PL': "x = c * (((a - d)/(y - d))^(1/g) - 1)^(1/b)",
-            '4PL': "x = c * ((a - d)/(y - d) - 1)^(1/b)",
-            'Sigmoid': "x = x0 - log((L/y) - 1)/k",
-            'Linear': "x = (y - b) / a"
-        }
-
-        param_rows = []
-        for row in summary_rows:
-            model = row['Model']
-            entry = {
-                "Sample": row['Sample'],
-                "Model": model,
-                "Formula": formula_map.get(model, ''),
-                "Inverse": inverse_map.get(model, ''),
-                "TT": row.get("Threshold Time"),
-                "TT CI Lower": row.get("TT CI Lower"),
-                "TT CI Upper": row.get("TT CI Upper"),
-                "TT StdErr": row.get("TT StdErr"),
-                "Log CFU/mL": row.get("Log CFU/mL")
+            # Add formulas and CI
+            formula_map = {
+                '5PL': "y = d + (a - d) / (1 + (x / c)^b)^g",
+                '4PL': "y = d + (a - d) / (1 + (x / c)^b)",
+                'Sigmoid': "y = L / (1 + exp(-k*(x - x0)))",
+                'Linear': "y = a*x + b"
             }
-            param_rows.append(entry)
+            inverse_map = {
+                '5PL': "x = c * (((a - d)/(y - d))^(1/g) - 1)^(1/b)",
+                '4PL': "x = c * ((a - d)/(y - d) - 1)^(1/b)",
+                'Sigmoid': "x = x0 - log((L/y) - 1)/k",
+                'Linear': "x = (y - b) / a"
+            }
+
+            param_rows = []
+            for row in summary_rows:
+                model = row['Model']
+                sample = row['Sample']
+                params_df = fit_results.get(sample)
+                popt = None
+    
+                # Try to extract parameters from the fitted dataframe if stored
+                if params_df is not None and 'Fit' in params_df:
+                    try:
+                        popt = np.polyfit(params_df['Time'], params_df['Fit'], 1) if model == 'Linear' else None
+                    except:
+                        popt = None
+    
+                formula = formula_map.get(model, '')
+                inverse = inverse_map.get(model, '')
+    
+                # Use the actual values stored from the summary (your main storage of popt)
+                # You can keep popt directly if you stored it earlier in session state, but we'll reconstruct from values here
+                fitted_params = []
+                if model == "Linear":
+                    fitted_params = np.polyfit(params_df['Time'], params_df['Fit'], 1)
+                    full_formula = f"y = {fitted_params[0]:.4f} * x + {fitted_params[1]:.4f}"
+                elif model == "4PL" and 'Threshold Time' in row:
+                    # Manually map to names: a, d, c, b
+                    if 'TT CI Lower' in row:  # this means popt was calculated
+                        a = row.get('CI Params', [])[0] if 'CI Params' in row else None
+                        d = row.get('CI Params', [])[1] if 'CI Params' in row else None
+                        c = row.get('CI Params', [])[2] if 'CI Params' in row else None
+                        b = row.get('CI Params', [])[3] if 'CI Params' in row else None
+                        full_formula = f"y = {d:.4f} + ({a:.4f} - {d:.4f}) / (1 + (x / {c:.4f})^{b:.4f})" if None not in (a,d,c,b) else ""
+                    else:
+                        full_formula = ""
+                else:
+                    full_formula = ""  # Add cases for 5PL or sigmoid if desired
+    
+                entry = {
+                    "Sample": sample,
+                    "Model": model,
+                    "Formula": formula,
+                    "Inverse": inverse,
+                    "TT": row.get("Threshold Time"),
+                    "TT CI Lower": row.get("TT CI Lower"),
+                    "TT CI Upper": row.get("TT CI Upper"),
+                    "TT StdErr": row.get("TT StdErr"),
+                    "Log CFU/mL": row.get("Log CFU/mL"),
+                    "Full Formula": full_formula
+                }
+    
+                param_rows.append(entry)
+
         
         pd.DataFrame(param_rows).to_excel(writer, sheet_name="Fit Parameters", index=False)
         
