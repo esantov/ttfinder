@@ -110,29 +110,29 @@ def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y
             'Linear': "x = (y - b) / a"
         }
 
-param_rows = []
-for row in summary_rows:
-    model = row['Model']
-    entry = {
-        "Sample": row['Sample'],
-        "Model": model,
-        "Formula": formula_map.get(model, ''),
-        "Inverse": inverse_map.get(model, ''),
-        "TT": row.get("Threshold Time"),
-        "TT CI Lower": row.get("TT CI Lower"),
-        "TT CI Upper": row.get("TT CI Upper"),
-        "TT StdErr": row.get("TT StdErr"),
-        "Log CFU/mL": row.get("Log CFU/mL")
-    }
-    param_rows.append(entry)
-
-    pd.DataFrame(param_rows).to_excel(writer, sheet_name="Fit Parameters", index=False)
-
-    for sample, df in fit_results.items():
-        df.to_excel(writer, sheet_name=sample[:31], index=False)
-
-    output.seek(0)
-    return output
+        param_rows = []
+        for row in summary_rows:
+            model = row['Model']
+            entry = {
+                "Sample": row['Sample'],
+                "Model": model,
+                "Formula": formula_map.get(model, ''),
+                "Inverse": inverse_map.get(model, ''),
+                "TT": row.get("Threshold Time"),
+                "TT CI Lower": row.get("TT CI Lower"),
+                "TT CI Upper": row.get("TT CI Upper"),
+                "TT StdErr": row.get("TT StdErr"),
+                "Log CFU/mL": row.get("Log CFU/mL")
+            }
+            param_rows.append(entry)
+        
+            pd.DataFrame(param_rows).to_excel(writer, sheet_name="Fit Parameters", index=False)
+        
+            for sample, df in fit_results.items():
+                df.to_excel(writer, sheet_name=sample[:31], index=False)
+        
+            output.seek(0)
+            return output
 
 # --- UI ---
 st.title("📈 TT Finder - Curve Fitting Tool")
