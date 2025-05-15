@@ -204,8 +204,10 @@ if not data.empty and len(data.columns) > 1:
 
                 r2 = r2_score(y, y_fit)
                 tt_val = inverse_threshold_curve(manual_thresh, func, popt)
+
+   # Confidence Interval & StdErr for TT                
                 tt_ci_low = tt_ci_high = tt_stderr = None
-                if tt_val is not None and model != "Linear":
+                if tt_val is not None and model != "Linear" and pcov is not None:
                     try:
                         grad_tt = np.array([
                             (inverse_threshold_curve(manual_thresh + 1e-5, func, popt) -
@@ -216,8 +218,9 @@ if not data.empty and len(data.columns) > 1:
                             delta = tval * tt_stderr
                             tt_ci_low = tt_val - delta
                             tt_ci_high = tt_val + delta
-                    except:
-                        pass
+                    except Exception as e:
+                        st.warning(f"⚠️ Could not calculate CI for TT in {col}: {e}")
+                          
                 
                 logcfu = None
                 if tt_val and 'calibration_coef' in st.session_state:
@@ -231,9 +234,9 @@ if not data.empty and len(data.columns) > 1:
                     'Model': model,
                     'R²': round(r2, 3),
                     'Threshold Time': tt_val,
-                    'TT CI Lower': tt_ci_low[0] if isinstance(tt_ci_low, np.ndarray) else tt_ci_low,
-                    'TT CI Upper': tt_ci_high[0] if isinstance(tt_ci_high, np.ndarray) else tt_ci_high,
-                    'TT StdErr': tt_stderr[0] if isinstance(tt_stderr, np.ndarray) else tt_stderr,
+                    'TT CI Lower': float(tt_ci_low[0]) if isinstance(tt_ci_low, np.ndarray) else tt_ci_low,
+                    'TT CI Upper': float(tt_ci_high[0]) if isinstance(tt_ci_high, np.ndarray) else tt_ci_high,
+                    'TT StdErr': float(tt_stderr[0]) if isinstance(tt_stderr, np.ndarray) else tt_stderr,
                     'Log CFU/mL': logcfu
                 })
 
