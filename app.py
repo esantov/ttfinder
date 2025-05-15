@@ -225,8 +225,10 @@ if not data.empty and len(data.columns) > 1:
 
         with st.expander(col):
             model = st.selectbox("Model",
-                ["5PL", "4PL", "Sigmoid", "Gompertz", "Linear"], key=col)
-
+                ["5PL", "4PL", "Sigmoid", "Gompertz", "Linear"], 
+            key=f"{col}_model"    # ensure a fresh key per column
+            )
+            
             if model == "5PL":
                 func, p0 = logistic_5pl, [min(y), max(y), np.median(x), 1, 1]
             elif model == "4PL":
@@ -235,7 +237,7 @@ if not data.empty and len(data.columns) > 1:
                 func, p0 = sigmoid,       [max(y), np.median(x), 1]
             elif model == "Gompertz":
                 func, p0 = gompertz,      [max(y), 1.0, 1.0]
-            else:
+            else:  # Linear
                 func, p0 = lambda x,a,b: a*x + b, None
 
             try:
