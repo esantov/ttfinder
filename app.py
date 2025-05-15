@@ -128,8 +128,8 @@ for row in summary_rows:
 
     pd.DataFrame(param_rows).to_excel(writer, sheet_name="Fit Parameters", index=False)
 
-        for sample, df in fit_results.items():
-            df.to_excel(writer, sheet_name=sample[:31], index=False)
+    for sample, df in fit_results.items():
+        df.to_excel(writer, sheet_name=sample[:31], index=False)
     output.seek(0)
     return output
 
