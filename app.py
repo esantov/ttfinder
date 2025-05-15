@@ -113,16 +113,15 @@ for col in data.columns[1:]:
             else:
                 st.error("Unsupported model selected.")
                 continue
-          try:
-        # Calculate confidence intervals
-        dof = len(x) - len(popt)
-        tval = t.ppf(0.975, dof)
-        ci_lower, ci_upper = [], []
-        for i, xi in enumerate(x):
-            grad = np.array([(gompertz(xi, *(popt + np.eye(len(popt))[j]*1e-5)) - y_fit[i]) / 1e-5 for j in range(len(popt))])
-            se = np.sqrt(grad @ np.cov(x))  # Ensure this line is properly indented and within the try block
-            delta = tval * se
-            ci_lower.append(y_fit[i] - delta)
-            ci_upper.append(y_fit[i] + delta)
-    except Exception as e:
-        st.warning(f"⚠️ Could not calculate confidence intervals: {e}")
+            # Calculate confidence intervals
+            dof = len(x) - len(popt)
+            tval = t.ppf(0.975, dof)
+            ci_lower, ci_upper = [], []
+            for i, xi in enumerate(x):
+                grad = np.array([(gompertz(xi, *(popt + np.eye(len(popt))[j]*1e-5)) - y_fit[i]) / 1e-5 for j in range(len(popt))])
+                se = np.sqrt(grad @ np.cov(x))  # Ensure this line is properly indented and within the try block
+                delta = tval * se
+                ci_lower.append(y_fit[i] - delta)
+                ci_upper.append(y_fit[i] + delta)
+        except Exception as e:
+            st.warning(f"⚠️ Could not calculate confidence intervals: {e}")
