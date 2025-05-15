@@ -78,7 +78,7 @@ def generate_sample_plot(sample, df, x_label, y_label,
                         xerr=tt_se,
                         fmt='none',
                         ecolor='green',
-                        capsize=5,
+                        capsize=3,
                         label='TT ± SE')
             
     ax.set_xlabel(x_label)
