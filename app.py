@@ -94,7 +94,20 @@ def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y
             (a, b), _ = calibration
             pd.DataFrame({"Calibration Name": ["Manual"], "Slope": [a], "Intercept": [b]}).to_excel(writer, sheet_name="Calibration", index=False)
         if summary_rows:
-            pd.DataFrame(summary_rows).to_excel(writer, sheet_name="Summary", index=False)
+            summary_df = pd.DataFrame(summary_rows)
+            expected_cols = [
+                "Sample", "Model", "R²", "Threshold Time", "TT CI Lower",
+                "TT CI Upper", "TT StdErr", "Log CFU/mL"
+            ]
+
+            # Ensure all expected columns are present (fill missing with None)
+            for col in expected_cols:
+                if col not in summary_df.columns:
+                    summary_df[col] = None
+            
+            summary_df = summary_df[expected_cols]
+            summary_df.to_excel(writer, sheet_name="Summary", index=False)
+
 
         # Add formulas and CI
         formula_map = {
