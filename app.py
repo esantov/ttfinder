@@ -96,16 +96,36 @@ def create_excel_report(data, fit_results, summary_rows, calibration, x_label, y
         if summary_rows:
             pd.DataFrame(summary_rows).to_excel(writer, sheet_name="Summary", index=False)
 
-        # Add formulas
-        param_rows = []
-        for row in summary_rows:
-            entry = {
-                "Sample": row['Sample'],
-                "Model": row['Model'],
-                "TT": row.get("Threshold Time"),
-                "Log CFU/mL": row.get("Log CFU/mL")
-            }
-            param_rows.append(entry)
+        # Add formulas and CI
+        formula_map = {
+            '5PL': "y = d + (a - d) / (1 + (x / c)^b)^g",
+            '4PL': "y = d + (a - d) / (1 + (x / c)^b)",
+            'Sigmoid': "y = L / (1 + exp(-k*(x - x0)))",
+            'Linear': "y = a*x + b"
+        }
+        inverse_map = {
+            '5PL': "x = c * (((a - d)/(y - d))^(1/g) - 1)^(1/b)",
+            '4PL': "x = c * ((a - d)/(y - d) - 1)^(1/b)",
+            'Sigmoid': "x = x0 - log((L/y) - 1)/k",
+            'Linear': "x = (y - b) / a"
+        }
+
+param_rows = []
+for row in summary_rows:
+    model = row['Model']
+    entry = {
+        "Sample": row['Sample'],
+        "Model": model,
+        "Formula": formula_map.get(model, ''),
+        "Inverse": inverse_map.get(model, ''),
+        "TT": row.get("Threshold Time"),
+        "TT CI Lower": row.get("TT CI Lower"),
+        "TT CI Upper": row.get("TT CI Upper"),
+        "TT StdErr": row.get("TT StdErr"),
+        "Log CFU/mL": row.get("Log CFU/mL")
+    }
+    param_rows.append(entry)
+
         pd.DataFrame(param_rows).to_excel(writer, sheet_name="Fit Parameters", index=False)
 
         for sample, df in fit_results.items():
@@ -183,6 +203,21 @@ if not data.empty and len(data.columns) > 1:
 
                 r2 = r2_score(y, y_fit)
                 tt_val = inverse_threshold_curve(manual_thresh, func, popt)
+                tt_ci_low = tt_ci_high = tt_stderr = None
+                if tt_val is not None and model != "Linear":
+                    try:
+                        grad_tt = np.array([
+                            (inverse_threshold_curve(manual_thresh + 1e-5, func, popt) -
+                             inverse_threshold_curve(manual_thresh, func, popt)) / 1e-5
+                        ])
+                        if pcov.shape[0] == grad_tt.shape[0]:
+                            tt_stderr = np.sqrt(grad_tt @ pcov @ grad_tt.T)
+                            delta = tval * tt_stderr
+                            tt_ci_low = tt_val - delta
+                            tt_ci_high = tt_val + delta
+                    except:
+                        pass
+                
                 logcfu = None
                 if tt_val and 'calibration_coef' in st.session_state:
                     a, b = st.session_state['calibration_coef'][0]
@@ -195,6 +230,9 @@ if not data.empty and len(data.columns) > 1:
                     'Model': model,
                     'R²': round(r2, 3),
                     'Threshold Time': tt_val,
+                    'TT CI Lower': tt_ci_low[0] if isinstance(tt_ci_low, np.ndarray) else tt_ci_low,
+                    'TT CI Upper': tt_ci_high[0] if isinstance(tt_ci_high, np.ndarray) else tt_ci_high,
+                    'TT StdErr': tt_stderr[0] if isinstance(tt_stderr, np.ndarray) else tt_stderr,
                     'Log CFU/mL': logcfu
                 })
 
