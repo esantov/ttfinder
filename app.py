@@ -258,6 +258,7 @@ if not data.empty and len(data.columns) > 1:
                     logcfu = a * tt_val + b
 
                 fit_df = pd.DataFrame({'Time': x, 'Raw': y, 'Fit': y_fit, 'CI Lower': y_ci[0], 'CI Upper': y_ci[1]})
+                fit_df.attrs['popt'] = popt  # Required for Excel export
                 fit_results[col] = fit_df
                 st.session_state['summary_rows'].append({
                     'Sample': col,
@@ -306,7 +307,7 @@ if not data.empty and len(data.columns) > 1:
 
         excel_buf = create_excel_report(
             data, fit_results, st.session_state["summary_rows"],
-            st.session_state.get('calibration_coef'), x_label, y_label
+            st.session_state.get('calibration_coef'), x_label, y_label, manual_thresh
         )
 
         st.download_button(
