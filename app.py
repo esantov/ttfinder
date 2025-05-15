@@ -242,6 +242,19 @@ if not data.empty and len(data.columns) > 1:
 
             except Exception as e:
                 st.error(f"❌ Fitting failed for {col}: {e}")
+   
+    # After fitting all samples
+    combined_buf = generate_combined_plot(
+        fit_results,
+        manual_thresh,
+        x_label,
+        y_label,
+        st.session_state['summary_rows']
+    )
+    
+    st.markdown("### 📊 Combined Fit Plot")
+    st.image(combined_buf, caption="Combined Fit of All Samples", use_container_width=True)
+
 
     # --- Summary + Downloads ---
     if st.session_state.get("summary_rows"):
