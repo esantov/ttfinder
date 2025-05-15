@@ -268,11 +268,18 @@ if not data.empty and len(data.columns) > 1:
             except Exception as e:
                 st.error(f"❌ Fitting failed for {col}: {e}")
 
+    # build combined plot buffer
     combined_buf = generate_combined_plot(
         fit_results, manual_thresh, x_label, y_label,
         st.session_state['summary_rows']
     )
 
+    # show combined plot inline
+    st.subheader("Combined Fit Plot")
+    st.image(combined_buf, caption="Combined Fit", use_container_width=True)
+
+    
+    # download buttons
     st.download_button(
         "📦 Download All Plots (ZIP)",
         data=export_all_plots_zip(
