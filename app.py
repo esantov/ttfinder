@@ -65,25 +65,33 @@ def generate_sample_plot(sample, df, x_label, y_label,
     ax.fill_between(df['Time'], df['CI Lower'], df['CI Upper'],
                     color='red', alpha=0.1, label='95% CI')
     ax.axhline(y=threshold, color='green', linestyle='--', label='Threshold')
+                             
     if tt_val is not None:
         # vertical line at TT
         ax.axvline(x=tt_val, color='orange', linestyle=':', label='TT')
+        # draw green dot at (TT, threshold)
+        ax.plot(tt_val, threshold,
+                marker='o', color='green', label='TT')
         # horizontal error bar to show ±SE
         if tt_se is not None:
             ax.errorbar(tt_val, threshold,
                         xerr=tt_se,
                         fmt='none',
-                        ecolor='orange',
+                        ecolor='green',
                         capsize=5,
                         label='TT ± SE')
+            
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
+                             
     title = f"{sample} Fit"
     if tt_val is not None and logcfu is not None:
         title += f" (TT: {tt_val:.2f}±{tt_se:.2f} h, CFU: {logcfu:.2f})"
     ax.set_title(title)
+                             
     ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
+                             
     buf = BytesIO()
     fig.savefig(buf, format="png", dpi=300)
     buf.seek(0)
